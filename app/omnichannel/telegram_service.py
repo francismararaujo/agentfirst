@@ -29,7 +29,11 @@ class TelegramService:
             self.bot_token = bot_token
         else:
             secrets = SecretsManager()
-            self.bot_token = secrets.get_telegram_token()
+            telegram_secret = secrets.get_secret("AgentFirst/telegram-bot-token")
+            if telegram_secret and isinstance(telegram_secret, dict):
+                self.bot_token = telegram_secret.get("bot_token")
+            else:
+                self.bot_token = None
 
         self.api_url = f"https://api.telegram.org/bot{self.bot_token}"
 
