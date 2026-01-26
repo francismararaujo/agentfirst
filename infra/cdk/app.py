@@ -1,10 +1,17 @@
 """AWS CDK App for AgentFirst2 MVP Infrastructure"""
 
 import os
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 from aws_cdk import App, Environment
-from infra.cdk.stacks.core_stack import CoreStack
-from infra.cdk.stacks.lambda_stack import LambdaStack
-from infra.cdk.stacks.monitoring_stack import MonitoringStack
+from stacks.core_stack import CoreStack
+from stacks.lambda_stack import LambdaStack
+from stacks.monitoring_stack import MonitoringStack
 
 
 def main():
