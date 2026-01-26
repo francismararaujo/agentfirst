@@ -1,0 +1,7 @@
+# AWS CDK
+aws-cdk-lib==2.170.0
+constructs==10.3.0
+
+# Utilities
+pydantic==1.10.12
+python-dotenv==1.2.1

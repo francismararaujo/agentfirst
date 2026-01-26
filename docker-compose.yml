@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # LocalStack for local AWS services
+  localstack:
+    image: localstack/localstack:latest
+    container_name: agentfirst-localstack
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+    environment:
+      - SERVICES=dynamodb,sns,sqs,secretsmanager,cloudwatch,xray
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=testing
+      - AWS_SECRET_ACCESS_KEY=testing
+    volumes:
+      - "${TMPDIR}:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - agentfirst
+
+  # DynamoDB Local (alternative to LocalStack)
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    container_name: agentfirst-dynamodb
+    ports:
+      - "8000:8000"
+    environment:
+      - AWS_ACCESS_KEY_ID=testing
+      - AWS_SECRET_ACCESS_KEY=testing
+      - AWS_DEFAULT_REGION=us-east-1
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
+    networks:
+      - agentfirst
+
+  # FastAPI Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agentfirst-app
+    ports:
+      - "8001:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=testing
+      - AWS_SECRET_ACCESS_KEY=testing
+      - DYNAMODB_ENDPOINT=http://dynamodb:8000
+      - LOG_LEVEL=INFO
+      - XRAY_ENABLED=false
+    volumes:
+      - ./app:/app/app
+      - ./infra:/app/infra
+    depends_on:
+      - dynamodb
+    networks:
+      - agentfirst
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+networks:
+  agentfirst:
+    driver: bridge

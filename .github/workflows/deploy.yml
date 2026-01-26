@@ -1,0 +1,154 @@
+name: Validate, Build & Deploy
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: 373527788609
+  ECR_REPOSITORY: agentfirst-gateway
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r app/requirements.txt
+      
+      - name: Run basic validation
+        run: |
+          echo "🔍 Running basic validation..."
+          python -c "import app.main; print('✅ App imports successfully')"
+          python -c "import app.lambda_handler; print('✅ Lambda handler imports successfully')"
+          echo "✅ Basic validation passed"
+      
+      # TODO: Uncomment tests once test suite is complete
+      # - name: Run unit tests
+      #   run: |
+      #     python -m pytest app/tests/unit/ -v --tb=short --cov=app --cov-report=xml
+      
+      # - name: Run integration tests
+      #   run: |
+      #     python -m pytest app/tests/integration/ -v --tb=short
+      
+      # - name: Run performance tests
+      #   run: |
+      #     python -m pytest app/tests/performance/ -v --tb=short
+      
+      # - name: Run property-based tests
+      #   run: |
+      #     python -m pytest app/tests/ -m property -v --hypothesis-seed=0
+      
+      # - name: Upload coverage
+      #   uses: codecov/codecov-action@v3
+      #   with:
+      #     file: ./coverage.xml
+      #     flags: unittests
+      #     fail_ci_if_error: false
+
+  build-and-deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Create ECR repository if not exists
+        run: |
+          aws ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION || \
+          aws ecr create-repository --repository-name $ECR_REPOSITORY --region $AWS_REGION
+      
+      - name: Build Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+      
+      - name: Push Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+      
+      - name: Install Node.js for CDK
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Install AWS CDK
+        run: npm install -g aws-cdk
+      
+      - name: Set up Python for CDK
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install CDK dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r infra/cdk/requirements.txt
+      
+      - name: Deploy with CDK
+        env:
+          AWS_ACCOUNT_ID: ${{ env.AWS_ACCOUNT_ID }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+          ENVIRONMENT: production
+        run: |
+          cd infra/cdk
+          cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION
+          cdk deploy --all --require-approval never
+      
+      - name: Run smoke tests
+        run: |
+          echo "🧪 Running smoke tests..."
+          sleep 10  # Wait for deployment to stabilize
+          
+          # Test health endpoint
+          HEALTH_URL="https://d7p93u5agk.execute-api.us-east-1.amazonaws.com/prod/health"
+          echo "Testing: $HEALTH_URL"
+          
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_URL)
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Health check passed"
+          else
+            echo "❌ Health check failed (HTTP $RESPONSE)"
+            exit 1
+          fi
+      
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "🎉 Deployment successful!"
+          echo "📱 API Endpoint: https://d7p93u5agk.execute-api.us-east-1.amazonaws.com/prod/"
+          echo "🤖 Telegram Webhook: https://d7p93u5agk.execute-api.us-east-1.amazonaws.com/prod/webhook/telegram"
