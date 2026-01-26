@@ -22,7 +22,7 @@ class SecretsManager:
         )
         self._cache: Dict[str, Any] = {}
 
-    async def get_secret(self, secret_name: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
+    def get_secret(self, secret_name: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
         """
         Retrieve a secret from AWS Secrets Manager
 
@@ -66,16 +66,16 @@ class SecretsManager:
                 logger.error(f"Error retrieving secret {secret_name}: {error_code}")
             return None
 
-    async def get_telegram_token(self) -> Optional[str]:
+    def get_telegram_token(self) -> Optional[str]:
         """Get Telegram bot token from Secrets Manager"""
-        secret = await self.get_secret("telegram-bot-token")
+        secret = self.get_secret("telegram-bot-token")
         if secret and isinstance(secret, dict):
             return secret.get("token")
         return secret
 
-    async def get_ifood_credentials(self) -> Optional[Dict[str, str]]:
+    def get_ifood_credentials(self) -> Optional[Dict[str, str]]:
         """Get iFood OAuth credentials from Secrets Manager"""
-        secret = await self.get_secret("ifood-oauth-credentials")
+        secret = self.get_secret("ifood-oauth-credentials")
         if secret and isinstance(secret, dict):
             return {
                 "client_id": secret.get("client_id"),
@@ -83,16 +83,16 @@ class SecretsManager:
             }
         return None
 
-    async def get_bedrock_key(self) -> Optional[str]:
+    def get_bedrock_key(self) -> Optional[str]:
         """Get Bedrock API key from Secrets Manager"""
-        secret = await self.get_secret("bedrock-api-key")
+        secret = self.get_secret("bedrock-api-key")
         if secret and isinstance(secret, dict):
             return secret.get("api_key")
         return secret
 
-    async def get_database_credentials(self) -> Optional[Dict[str, str]]:
+    def get_database_credentials(self) -> Optional[Dict[str, str]]:
         """Get database credentials from Secrets Manager"""
-        secret = await self.get_secret("database-credentials")
+        secret = self.get_secret("database-credentials")
         if secret and isinstance(secret, dict):
             return {
                 "username": secret.get("username"),

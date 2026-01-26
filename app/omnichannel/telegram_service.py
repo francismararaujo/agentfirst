@@ -29,7 +29,7 @@ class TelegramService:
             self.bot_token = bot_token
         else:
             secrets = SecretsManager()
-            self.bot_token = secrets.get_secret("telegram_bot_token")
+            self.bot_token = secrets.get_telegram_token()
 
         self.api_url = f"https://api.telegram.org/bot{self.bot_token}"
 
