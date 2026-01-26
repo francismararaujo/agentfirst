@@ -127,6 +127,8 @@ class CoreStack(Stack):
             time_to_live_attribute="expires_at",
             removal_policy=RemovalPolicy.RETAIN,
             table_name=f"agentfirst-memory-{self.environment_name}",
+            # Enable DynamoDB Streams for event sourcing
+            stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
         )
 
         # Add GSI for domain queries
@@ -142,9 +144,6 @@ class CoreStack(Stack):
             ),
             projection_type=dynamodb.ProjectionType.ALL,
         )
-
-        # Enable DynamoDB Streams for event sourcing
-        table.add_stream(dynamodb.StreamSpecification.NEW_AND_OLD_IMAGES)
 
         return table
 
