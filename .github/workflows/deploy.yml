@@ -129,14 +129,12 @@ jobs:
         run: |
           cd infra/cdk
           
-          # Check if bootstrap is needed
-          echo "🔍 Checking CDK bootstrap status..."
-          if ! aws cloudformation describe-stacks --stack-name CDKToolkit --region $AWS_REGION >/dev/null 2>&1; then
-            echo "🚀 Bootstrapping CDK environment..."
-            cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION
-          else
-            echo "✅ CDK environment already bootstrapped"
-          fi
+          # Force re-bootstrap with proper trust policy for github-actions-user
+          echo "🚀 Re-bootstrapping CDK environment with proper permissions..."
+          cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION \
+            --trust $AWS_ACCOUNT_ID \
+            --cloudformation-execution-policies arn:aws:iam::aws:policy/AdministratorAccess \
+            --force
           
           # Deploy stacks
           echo "📦 Deploying application stacks..."
