@@ -126,7 +126,22 @@ jobs:
           ENVIRONMENT: production
         run: |
           cd infra/cdk
-          cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION
+          
+          # Force clean bootstrap (remove any existing resources)
+          echo "🧹 Cleaning any existing CDK resources..."
+          aws s3 rb s3://cdk-hnb659fds-assets-373527788609-us-east-1 --force 2>/dev/null || true
+          aws cloudformation delete-stack --stack-name CDKToolkit --region us-east-1 2>/dev/null || true
+          
+          # Wait for cleanup
+          echo "⏳ Waiting for cleanup to complete..."
+          sleep 30
+          
+          # Bootstrap CDK with force flag
+          echo "🚀 Bootstrapping CDK environment..."
+          cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION --force
+          
+          # Deploy stacks
+          echo "📦 Deploying application stacks..."
           cdk deploy --all --require-approval never
       
       - name: Run smoke tests
