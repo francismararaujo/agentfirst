@@ -54,15 +54,9 @@ class MonitoringStack(Stack):
 
     def _create_log_groups(self) -> None:
         """Create CloudWatch log groups"""
-        # Lambda logs
-        logs.LogGroup(
-            self,
-            "LambdaLogGroup",
-            log_group_name=f"/aws/lambda/agentfirst-{self.environment_name}",
-            retention=logs.RetentionDays.ONE_WEEK,
-            removal_policy=RemovalPolicy.DESTROY,
-        )
-
+        # Note: Lambda log group is created automatically by AWS Lambda
+        # We only create additional log groups that are not auto-created
+        
         # API Gateway logs
         logs.LogGroup(
             self,
