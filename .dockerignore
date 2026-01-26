@@ -57,6 +57,12 @@ docs/
 .gitlab-ci.yml
 .travis.yml
 
+# CDK Output (CRITICAL - prevents recursive copying)
+infra/cdk/cdk.out/
+infra/cdk/cdk.context.json
+cdk.out/
+*.d.ts
+
 # Other
 node_modules/
 .cache/

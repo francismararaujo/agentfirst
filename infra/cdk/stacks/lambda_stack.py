@@ -120,14 +120,18 @@ class LambdaStack(Stack):
         # Create Lambda function using Docker image
         # This ensures compiled dependencies like pydantic_core are properly included
         
-        # Get project root directory (where Dockerfile is located)
-        project_root = os.path.join(os.path.dirname(__file__), "..", "..", "..")
-        dockerfile_path = os.path.abspath(project_root)
+        # Use a more specific path to avoid recursive copying issues
+        # Point directly to the project root (where Dockerfile is)
+        import pathlib
+        project_root = pathlib.Path(__file__).parent.parent.parent.parent
         
         lambda_function = lambda_.DockerImageFunction(
             self,
             "AgentFirstLambda",
-            code=lambda_.DockerImageCode.from_image_asset(dockerfile_path),
+            code=lambda_.DockerImageCode.from_image_asset(
+                str(project_root),
+                exclude=["infra/cdk/cdk.out", "**/*.pyc", "**/__pycache__", ".git"]
+            ),
             memory_size=512,
             timeout=Duration.seconds(30),
             environment={
