@@ -129,16 +129,23 @@ jobs:
         run: |
           cd infra/cdk
           
-          # Force re-bootstrap with proper trust policy for github-actions-user
-          echo "🚀 Re-bootstrapping CDK environment with proper permissions..."
-          cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION \
-            --trust $AWS_ACCOUNT_ID \
-            --cloudformation-execution-policies arn:aws:iam::aws:policy/AdministratorAccess \
-            --force
+          # Skip bootstrap since it already exists, go directly to deploy
+          echo "📦 Deploying application stacks (skipping bootstrap)..."
           
-          # Deploy stacks
-          echo "📦 Deploying application stacks..."
-          cdk deploy --all --require-approval never --verbose
+          # Try deploy first, if it fails due to permissions, we'll handle it
+          if ! cdk deploy --all --require-approval never --verbose; then
+            echo "❌ Deploy failed, checking if it's a permissions issue..."
+            
+            # Check if we can list stacks (basic permission test)
+            if aws cloudformation list-stacks --region $AWS_REGION >/dev/null 2>&1; then
+              echo "✅ AWS permissions are working"
+              echo "❌ Deploy failed for other reasons - check logs above"
+              exit 1
+            else
+              echo "❌ AWS permissions issue detected"
+              exit 1
+            fi
+          fi
       
       - name: Run smoke tests
         run: |
