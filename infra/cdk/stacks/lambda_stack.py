@@ -168,14 +168,14 @@ class LambdaStack(Stack):
             cloud_watch_role=True,
         )
 
-        # Add CloudWatch logging
+        # Add CloudWatch logging for error responses
         api.add_gateway_response(
             "DEFAULT_4XX",
-            log_retention=logs.RetentionDays.ONE_WEEK,
+            type=apigateway.ResponseType.DEFAULT_4XX,
         )
         api.add_gateway_response(
-            "DEFAULT_5XX",
-            log_retention=logs.RetentionDays.ONE_WEEK,
+            "DEFAULT_5XX", 
+            type=apigateway.ResponseType.DEFAULT_5XX,
         )
 
         # Create Lambda integration
