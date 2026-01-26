@@ -129,23 +129,26 @@ jobs:
         run: |
           cd infra/cdk
           
-          # Skip bootstrap since it already exists, go directly to deploy
-          echo "📦 Deploying application stacks (skipping bootstrap)..."
+          # First, let's try to fix the bootstrap issue by updating the existing one
+          echo "🔧 Updating CDK bootstrap with correct trust policy..."
           
-          # Try deploy first, if it fails due to permissions, we'll handle it
-          if ! cdk deploy --all --require-approval never --verbose; then
-            echo "❌ Deploy failed, checking if it's a permissions issue..."
-            
-            # Check if we can list stacks (basic permission test)
-            if aws cloudformation list-stacks --region $AWS_REGION >/dev/null 2>&1; then
-              echo "✅ AWS permissions are working"
-              echo "❌ Deploy failed for other reasons - check logs above"
-              exit 1
-            else
-              echo "❌ AWS permissions issue detected"
-              exit 1
-            fi
-          fi
+          # Delete the existing bootstrap stack to recreate it properly
+          echo "🗑️ Removing existing bootstrap stack..."
+          aws cloudformation delete-stack --stack-name CDKToolkit --region $AWS_REGION || true
+          
+          # Wait for deletion to complete
+          echo "⏳ Waiting for stack deletion..."
+          aws cloudformation wait stack-delete-complete --stack-name CDKToolkit --region $AWS_REGION || true
+          
+          # Now bootstrap with correct settings
+          echo "🚀 Bootstrapping with correct trust policy..."
+          cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION \
+            --trust $AWS_ACCOUNT_ID \
+            --cloudformation-execution-policies arn:aws:iam::aws:policy/AdministratorAccess
+          
+          # Deploy stacks
+          echo "📦 Deploying application stacks..."
+          cdk deploy --all --require-approval never --verbose
       
       - name: Run smoke tests
         run: |
