@@ -32,6 +32,8 @@ jobs:
       - name: Run basic validation
         run: |
           echo "🔍 Running basic validation..."
+          echo "Python version: $(python --version)"
+          python -c "import sys; print(f'Python path: {sys.executable}')"
           python -c "import app.main; print('✅ App imports successfully')"
           python -c "import app.lambda_handler; print('✅ Lambda handler imports successfully')"
           echo "✅ Basic validation passed"
@@ -127,26 +129,50 @@ jobs:
         run: |
           cd infra/cdk
           
-          # Bootstrap CDK if needed (idempotent operation)
-          echo "🚀 Ensuring CDK environment is bootstrapped..."
-          cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION || true
+          # Check if bootstrap is needed
+          echo "🔍 Checking CDK bootstrap status..."
+          if ! aws cloudformation describe-stacks --stack-name CDKToolkit --region $AWS_REGION >/dev/null 2>&1; then
+            echo "🚀 Bootstrapping CDK environment..."
+            cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION
+          else
+            echo "✅ CDK environment already bootstrapped"
+          fi
           
           # Deploy stacks
           echo "📦 Deploying application stacks..."
-          cdk deploy --all --require-approval never
+          cdk deploy --all --require-approval never --verbose
       
       - name: Run smoke tests
         run: |
           echo "🧪 Running smoke tests..."
-          sleep 10  # Wait for deployment to stabilize
+          sleep 15  # Wait for deployment to stabilize
+          
+          # Get the API Gateway URL from CDK outputs
+          cd infra/cdk
+          API_URL=$(cdk output agentfirst-lambda-production.ApiGatewayUrl 2>/dev/null || echo "")
+          
+          if [ -z "$API_URL" ]; then
+            # Fallback to the known URL from previous deployment
+            API_URL="https://ain6spik95.execute-api.us-east-1.amazonaws.com/prod"
+          fi
           
           # Test health endpoint
-          HEALTH_URL="https://d7p93u5agk.execute-api.us-east-1.amazonaws.com/prod/health"
+          HEALTH_URL="$API_URL/health"
           echo "Testing: $HEALTH_URL"
           
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_URL)
           if [ "$RESPONSE" = "200" ]; then
             echo "✅ Health check passed"
+            
+            # Test status endpoint
+            STATUS_URL="$API_URL/status"
+            echo "Testing: $STATUS_URL"
+            STATUS_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" $STATUS_URL)
+            if [ "$STATUS_RESPONSE" = "200" ]; then
+              echo "✅ Status check passed"
+            else
+              echo "⚠️ Status check failed (HTTP $STATUS_RESPONSE) - continuing anyway"
+            fi
           else
             echo "❌ Health check failed (HTTP $RESPONSE)"
             exit 1
@@ -156,5 +182,11 @@ jobs:
         if: success()
         run: |
           echo "🎉 Deployment successful!"
-          echo "📱 API Endpoint: https://d7p93u5agk.execute-api.us-east-1.amazonaws.com/prod/"
-          echo "🤖 Telegram Webhook: https://d7p93u5agk.execute-api.us-east-1.amazonaws.com/prod/webhook/telegram"
+          
+          # Get the API Gateway URL from CDK outputs
+          cd infra/cdk
+          API_URL=$(cdk output agentfirst-lambda-production.ApiGatewayUrl 2>/dev/null || echo "https://ain6spik95.execute-api.us-east-1.amazonaws.com/prod")
+          
+          echo "📱 API Endpoint: $API_URL/"
+          echo "🤖 Telegram Webhook: $API_URL/webhook/telegram"
+          echo "🍔 iFood Webhook: $API_URL/webhook/ifood"
