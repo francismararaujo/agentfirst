@@ -84,7 +84,11 @@ class OmnichannelInterface:
         self.auth_service = AuthService(auth_config)
         
         self.session_manager = SessionManager()
-        self.memory_service = MemoryService()
+        
+        # Initialize MemoryService with DynamoDB client
+        import boto3
+        dynamodb_client = boto3.client('dynamodb', region_name='us-east-1')
+        self.memory_service = MemoryService(dynamodb_client)
         self.user_repository = UserRepository()
         
         # Initialize omnichannel services
