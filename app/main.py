@@ -12,7 +12,6 @@ import logging
 import json
 import time
 from typing import Callable
-from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -22,9 +21,6 @@ from aws_xray_sdk.core import patch_all
 from app.config.settings import settings
 from app.core.request_validator import RequestValidator
 from app.omnichannel.telegram_service import TelegramService
-from app.core.auditor import Auditor, AuditCategory, AuditLevel
-from app.core.supervisor import Supervisor
-from app.core.event_bus import EventBus
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -203,62 +199,12 @@ async def docs_examples():
                     }
                 },
                 "response": {"ok": True}
-            },
-            "ifood_webhook": {
-                "description": "Webhook do iFood para receber eventos",
-                "method": "POST",
-                "url": "/webhook/ifood",
-                "headers": {
-                    "X-Signature": "sha256=<hmac_signature>"
-                },
-                "request_body": {
-                    "eventId": "evt_123456789",
-                    "eventType": "order.placed",
-                    "timestamp": "2024-01-15T10:30:00Z",
-                    "merchantId": "merchant_123",
-                    "data": {
-                        "orderId": "order_456",
-                        "totalAmount": 45.50,
-                        "items": [
-                            {"name": "Hambúrguer", "quantity": 1, "price": 25.00}
-                        ]
-                    }
-                },
-                "response": {"ok": True}
-            },
-            "supervisor_commands": {
-                "description": "Comandos H.I.T.L. para supervisores",
-                "examples": [
-                    {
-                        "command": "/approve esc_abc123",
-                        "description": "Aprovar escalação"
-                    },
-                    {
-                        "command": "/reject esc_abc123 Risco muito alto",
-                        "description": "Rejeitar escalação com motivo"
-                    }
-                ]
-            }
-        },
-        "integration_patterns": {
-            "health_monitoring": {
-                "description": "Monitoramento periódico de saúde",
-                "code": "requests.get('/health')"
-            },
-            "webhook_retry": {
-                "description": "Webhook com retry automático",
-                "code": "@retry(stop=stop_after_attempt(3))"
-            },
-            "hmac_validation": {
-                "description": "Validação de assinatura HMAC",
-                "code": "hmac.compare_digest(expected, received)"
             }
         },
         "resources": {
             "openapi_spec": "/docs/openapi.yaml",
             "swagger_ui": "/docs",
-            "redoc": "/redoc",
-            "python_examples": "app/docs/api_examples.py"
+            "redoc": "/redoc"
         }
     }
 
@@ -311,204 +257,9 @@ async def telegram_webhook(request: Request):
         await telegram.send_typing_indicator(chat_id)
 
         try:
-            # Initialize omnichannel interface (centralized orchestrator)
-            from app.omnichannel.interface import OmnichannelInterface
-            from app.omnichannel.database.repositories import UserRepository
-            from app.omnichannel.database.models import User, UserTier
-            from app.omnichannel.models import ChannelType
-            from app.core.brain import Brain
-            from app.core.auditor import Auditor
-            from app.core.supervisor import Supervisor
-            from app.core.event_bus import EventBus
-            from app.domains.retail.retail_agent import RetailAgent
-            from app.domains.retail.ifood_connector_extended import iFoodConnectorExtended
-            from app.config.secrets_manager import SecretsManager
+            # For MVP, just echo the message back
+            response_text = f"Echo: {text}"
             
-            user_repo = UserRepository()
-            
-            # Check if message is email for registration
-            if "@" in text and "." in text and len(text.split()) == 1:
-                # User is sending email for registration
-                email = text.strip().lower()
-                
-                # Validate email
-                import re
-                email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-                if re.match(email_pattern, email):
-                    # Check if email already exists
-                    existing_user = await user_repo.get_by_email(email)
-                    
-                    if existing_user:
-                        # User exists, link Telegram ID
-                        if not existing_user.telegram_id:
-                            await user_repo.update(email, {"telegram_id": user_id})
-                            response_text = (
-                                f"✅ Perfeito! Vinculei seu Telegram ao email: {email}\n\n"
-                                "🍔 Agora você pode usar o AgentFirst!\n\n"
-                                "Experimente:\n"
-                                "• 'Quantos pedidos tenho?'\n"
-                                "• 'Qual meu faturamento hoje?'"
-                            )
-                        else:
-                            response_text = (
-                                f"✅ Email {email} já está cadastrado!\n\n"
-                                "🍔 Você já pode usar o AgentFirst!"
-                            )
-                    else:
-                        # Create new user
-                        new_user = User(
-                            email=email,
-                            telegram_id=user_id,
-                            tier=UserTier.FREE
-                        )
-                        await user_repo.create(new_user)
-                        
-                        response_text = (
-                            f"🎉 Cadastro realizado com sucesso!\n\n"
-                            f"📧 Email: {email}\n"
-                            f"🎯 Tier: Gratuito (100 mensagens/mês)\n\n"
-                            "🍔 Agora você pode gerenciar seus pedidos do iFood!\n\n"
-                            "Experimente:\n"
-                            "• 'Quantos pedidos tenho?'\n"
-                            "• 'Qual meu faturamento hoje?'\n"
-                            "• 'Feche a loja por 30 minutos'"
-                        )
-                else:
-                    response_text = (
-                        "❌ Email inválido!\n\n"
-                        "📧 Por favor, envie um email válido no formato:\n"
-                        "exemplo@dominio.com"
-                    )
-            else:
-                # Check if user is already registered
-                existing_user = await user_repo.get_by_telegram_id(user_id)
-                
-                if not existing_user:
-                    # User not registered
-                    if text.lower() in ["oi", "olá", "hello", "hi", "começar", "start"]:
-                        response_text = (
-                            "👋 Olá! Bem-vindo ao AgentFirst!\n\n"
-                            "🍔 Sou seu assistente para gerenciar pedidos do iFood.\n\n"
-                            "Para começar, preciso do seu email para identificá-lo em todos os canais.\n\n"
-                            "📧 Por favor, envie seu email:"
-                        )
-                    else:
-                        response_text = (
-                            "🔐 Para usar o AgentFirst, preciso do seu email primeiro.\n\n"
-                            "📧 Por favor, envie seu email:"
-                        )
-                else:
-                    # User registered - check if it's a supervisor command first
-                    if text.startswith('/approve ') or text.startswith('/reject '):
-                        # Handle supervisor commands directly (bypass omnichannel for H.I.T.L.)
-                        auditor = Auditor()
-                        supervisor = Supervisor(auditor=auditor, telegram_service=telegram)
-                        brain = Brain(auditor=auditor, supervisor=supervisor)
-                        
-                        # Configure supervisor
-                        brain.configure_supervisor(
-                            supervisor_id="default",
-                            name="Supervisor Padrão",
-                            telegram_chat_id=str(chat_id),
-                            specialties=["retail", "general"],
-                            priority_threshold=1
-                        )
-                        
-                        parts = text.split(' ', 2)
-                        command = parts[0][1:]  # Remove '/'
-                        escalation_id = parts[1] if len(parts) > 1 else None
-                        feedback = parts[2] if len(parts) > 2 else None
-                        
-                        if escalation_id:
-                            success = await brain.process_human_decision(
-                                escalation_id=escalation_id,
-                                decision=command,
-                                feedback=feedback,
-                                supervisor_id="default"
-                            )
-                            
-                            if success:
-                                response_text = (
-                                    f"✅ <b>Decisão processada!</b>\n\n"
-                                    f"📋 Escalação: {escalation_id}\n"
-                                    f"🎯 Decisão: {command.upper()}\n"
-                                    f"📝 Feedback: {feedback or 'Nenhum'}"
-                                )
-                            else:
-                                response_text = (
-                                    f"❌ <b>Erro ao processar decisão</b>\n\n"
-                                    f"📋 Escalação: {escalation_id}\n"
-                                    f"Verifique se o ID está correto e se a escalação ainda está pendente."
-                                )
-                        else:
-                            response_text = (
-                                "❌ <b>Formato inválido</b>\n\n"
-                                "Use:\n"
-                                "• <code>/approve [escalation_id]</code>\n"
-                                "• <code>/reject [escalation_id] [motivo]</code>"
-                            )
-                    else:
-                        # Process normal message via OmnichannelInterface
-                        # Initialize all services
-                        auditor = Auditor()
-                        supervisor = Supervisor(auditor=auditor, telegram_service=telegram)
-                        
-                        # Initialize EventBus with proper config
-                        from app.core.event_bus import EventBusConfig
-                        event_bus_config = EventBusConfig(region="us-east-1")
-                        event_bus = EventBus(event_bus_config)
-                        
-                        brain = Brain(auditor=auditor, supervisor=supervisor)
-                        
-                        # Initialize and register retail agent
-                        retail_agent = RetailAgent(auditor=auditor)
-                        secrets_manager = SecretsManager()
-                        ifood_connector = iFoodConnectorExtended(secrets_manager)
-                        retail_agent.register_connector('ifood', ifood_connector)
-                        brain.register_agent('retail', retail_agent)
-                        
-                        # Configure supervisor
-                        brain.configure_supervisor(
-                            supervisor_id="default",
-                            name="Supervisor Padrão",
-                            telegram_chat_id=str(chat_id),
-                            specialties=["retail", "general"],
-                            priority_threshold=1
-                        )
-                        
-                        # Initialize omnichannel interface
-                        omnichannel = OmnichannelInterface(
-                            brain=brain,
-                            auditor=auditor,
-                            supervisor=supervisor,
-                            event_bus=event_bus,
-                            telegram_service=telegram
-                        )
-                        
-                        # Register user channel mapping
-                        await omnichannel.register_user_channel(
-                            email=existing_user.email,
-                            channel=ChannelType.TELEGRAM,
-                            channel_user_id=str(user_id),
-                            metadata={"chat_id": str(chat_id)}
-                        )
-                        
-                        # Process message via omnichannel interface
-                        result = await omnichannel.process_message(
-                            channel=ChannelType.TELEGRAM,
-                            channel_user_id=str(user_id),
-                            message_text=text,
-                            message_id=str(message.get("message_id", "unknown")),
-                            metadata={"chat_id": str(chat_id)}
-                        )
-                        
-                        if result["success"]:
-                            response_text = result["response"]
-                            logger.info(f"Omnichannel processed message successfully in {result.get('processing_time_seconds', 0):.2f}s")
-                        else:
-                            response_text = result["response"]
-                            logger.warning(f"Omnichannel processing failed: {result.get('reason', 'unknown')}")
-        
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}")
             response_text = (
@@ -560,14 +311,6 @@ async def ifood_webhook(request: Request):
         # Get request body
         body = await request.body()
         body_str = body.decode("utf-8")
-
-        # Get signature from headers
-        signature = request.headers.get("X-Signature", "")
-
-        # TODO: Validate HMAC signature
-        # secret = await get_ifood_secret()
-        # if not RequestValidator.validate_hmac_signature(body_str, signature, secret):
-        #     return JSONResponse(status_code=401, content={"error": "Invalid signature"})
 
         # Validate JSON
         data = RequestValidator.validate_json_body(body_str)
@@ -626,4 +369,3 @@ if __name__ == "__main__":
         port=8000,
         log_level=settings.LOG_LEVEL.lower()
     )
-
