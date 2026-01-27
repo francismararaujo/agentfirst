@@ -62,7 +62,12 @@ class TestOmnichannelInterfaceIntegration:
         telegram_service.send_message.return_value = {"ok": True, "result": {"message_id": 123}}
         
         supervisor = Supervisor(auditor=auditor, telegram_service=telegram_service)
-        event_bus = EventBus()
+        
+        # Initialize EventBus with proper config
+        from app.core.event_bus import EventBusConfig
+        event_bus_config = EventBusConfig(region="us-east-1")
+        event_bus = EventBus(event_bus_config)
+        
         brain = Brain(auditor=auditor, supervisor=supervisor)
         
         return OmnichannelInterface(

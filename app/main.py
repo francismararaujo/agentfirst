@@ -24,6 +24,7 @@ from app.core.request_validator import RequestValidator
 from app.omnichannel.telegram_service import TelegramService
 from app.core.auditor import Auditor, AuditCategory, AuditLevel
 from app.core.supervisor import Supervisor
+from app.core.event_bus import EventBus
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -451,7 +452,12 @@ async def telegram_webhook(request: Request):
                         # Initialize all services
                         auditor = Auditor()
                         supervisor = Supervisor(auditor=auditor, telegram_service=telegram)
-                        event_bus = EventBus()
+                        
+                        # Initialize EventBus with proper config
+                        from app.core.event_bus import EventBusConfig
+                        event_bus_config = EventBusConfig(region="us-east-1")
+                        event_bus = EventBus(event_bus_config)
+                        
                         brain = Brain(auditor=auditor, supervisor=supervisor)
                         
                         # Initialize and register retail agent
