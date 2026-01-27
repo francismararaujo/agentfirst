@@ -1,0 +1,1 @@
+"""Retail Domain - Gerenciamento de operações de restaurante"""

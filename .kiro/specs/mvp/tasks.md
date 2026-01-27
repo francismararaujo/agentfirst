@@ -399,27 +399,27 @@
 ## Fase 6: Retail Agent (Strands) (Semana 2)
 
 ### 6.1 Retail Agent Base
-- [ ] Implementar RetailAgent (Strands)
-- [ ] Definir tools específicas
-- [ ] Implementar state management
-- [ ] Testes: 15+ testes
+- [x] Implementar RetailAgent (Strands)
+- [x] Definir tools específicas
+- [x] Implementar state management
+- [x] Testes: 15+ testes
 
 ### 6.2 Order Management Tools
-- [ ] check_orders() - Verifica pedidos
-- [ ] confirm_order() - Confirma pedido
-- [ ] cancel_order() - Cancela pedido
-- [ ] Testes: 20+ testes
+- [x] check_orders() - Verifica pedidos
+- [x] confirm_order() - Confirma pedido
+- [x] cancel_order() - Cancela pedido
+- [x] Testes: 20+ testes
 
 ### 6.3 Inventory Management Tools
-- [ ] update_inventory() - Atualiza estoque
-- [ ] forecast_demand() - Prevê demanda
-- [ ] Testes: 15+ testes
+- [x] update_inventory() - Atualiza estoque
+- [x] forecast_demand() - Prevê demanda
+- [x] Testes: 15+ testes
 
 ### 6.4 Error Handling
-- [ ] Retry com exponential backoff
-- [ ] Graceful degradation
-- [ ] Logging abrangente
-- [ ] Testes: 10+ testes
+- [x] Retry com exponential backoff
+- [x] Graceful degradation
+- [x] Logging abrangente
+- [x] Testes: 10+ testes
 
 ---
 

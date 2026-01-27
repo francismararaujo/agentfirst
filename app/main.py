@@ -12,6 +12,7 @@ import logging
 import json
 import time
 from typing import Callable
+from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -268,48 +269,139 @@ async def telegram_webhook(request: Request):
                         )
                 else:
                     # Usuário já cadastrado - processar comando
-                    from app.core.brain import Brain
+                    from app.core.brain import Brain, Context
+                    from app.domains.retail.retail_agent import RetailAgent
+                    from app.domains.retail.mock_ifood_connector import MockiFoodConnector
+                    from app.omnichannel.models import ChannelType
                     
+                    # Inicializar Brain e Retail Agent
                     brain = Brain()
+                    retail_agent = RetailAgent()
+                    
+                    # Registrar mock iFood connector
+                    mock_ifood = MockiFoodConnector()
+                    retail_agent.register_connector('ifood', mock_ifood)
+                    
+                    # Registrar Retail Agent no Brain
+                    brain.register_agent('retail', retail_agent)
+                    
+                    # Criar contexto
+                    context = Context(
+                        email=existing_user.email,
+                        channel=ChannelType.TELEGRAM,
+                        session_id=f"telegram_{user_id}",
+                        user_profile={
+                            'tier': existing_user.tier.value,
+                            'telegram_id': user_id
+                        }
+                    )
                     
                     # Classificar intenção
                     intent = await brain.classify_intent(text, existing_user.email)
                     
                     if intent.domain == "retail":
-                        # TODO: Implementar Retail Agent
-                        if intent.action == "check_orders":
-                            response_text = (
-                                f"🍔 Consultando seus pedidos no iFood...\n\n"
-                                "🔧 Retail Agent em implementação!\n\n"
-                                "Em breve mostrarei:\n"
-                                "• Pedidos pendentes\n"
-                                "• Status de cada pedido\n"
-                                "• Valores e detalhes"
-                            )
-                        elif intent.action == "check_revenue":
-                            response_text = (
-                                f"💰 Consultando seu faturamento...\n\n"
-                                "🔧 Retail Agent em implementação!\n\n"
-                                "Em breve mostrarei:\n"
-                                "• Faturamento do dia/semana/mês\n"
-                                "• Número de pedidos\n"
-                                "• Ticket médio"
-                            )
-                        elif intent.action == "manage_store":
-                            response_text = (
-                                f"🏪 Gerenciando sua loja...\n\n"
-                                "🔧 Retail Agent em implementação!\n\n"
-                                "Em breve poderei:\n"
-                                "• Abrir/fechar loja\n"
-                                "• Pausar pedidos temporariamente\n"
-                                "• Configurar horários"
-                            )
+                        # Executar via Retail Agent
+                        result = await retail_agent.execute(intent, context)
+                        
+                        if result.get('success'):
+                            if intent.action == "check_orders":
+                                orders = result.get('orders', [])
+                                if orders:
+                                    response_text = f"🍔 <b>Seus pedidos no iFood:</b>\n\n"
+                                    for i, order in enumerate(orders, 1):
+                                        status_emoji = {
+                                            'pending': '⏳',
+                                            'confirmed': '✅',
+                                            'preparing': '👨‍🍳',
+                                            'ready': '🍽️',
+                                            'delivered': '🚚',
+                                            'cancelled': '❌'
+                                        }.get(order.get('status', 'unknown'), '❓')
+                                        
+                                        response_text += (
+                                            f"{status_emoji} <b>Pedido #{order.get('id')}</b>\n"
+                                            f"💰 R$ {order.get('total', 0):.2f}\n"
+                                            f"👤 {order.get('customer', 'Cliente')}\n"
+                                            f"📦 {len(order.get('items', []))} itens\n\n"
+                                        )
+                                    
+                                    pending_count = result.get('pending_orders', 0)
+                                    if pending_count > 0:
+                                        response_text += f"⚠️ <b>{pending_count} pedidos precisam de confirmação!</b>"
+                                else:
+                                    response_text = "🍔 Nenhum pedido encontrado no iFood."
+                                    
+                            elif intent.action == "check_revenue":
+                                revenue = result.get('revenue', {})
+                                response_text = (
+                                    f"💰 <b>Faturamento iFood</b>\n\n"
+                                    f"📊 <b>Período:</b> {revenue.get('period', 'hoje')}\n"
+                                    f"💵 <b>Total:</b> R$ {revenue.get('total_revenue', 0):.2f}\n"
+                                    f"📦 <b>Pedidos:</b> {revenue.get('total_orders', 0)}\n"
+                                    f"🎯 <b>Ticket médio:</b> R$ {revenue.get('average_ticket', 0):.2f}\n\n"
+                                )
+                                
+                                top_items = revenue.get('top_items', [])[:3]
+                                if top_items:
+                                    response_text += "<b>🏆 Top 3 itens:</b>\n"
+                                    for i, item in enumerate(top_items, 1):
+                                        response_text += f"{i}. {item.get('name')} - {item.get('quantity')} vendas\n"
+                                        
+                            elif intent.action == "manage_store":
+                                store_result = result.get('result', result)
+                                action = result.get('action', 'status')
+                                status = store_result.get('status', 'unknown')
+                                
+                                status_emoji = {
+                                    'open': '🟢',
+                                    'closed': '🔴',
+                                    'paused': '🟡'
+                                }.get(status, '❓')
+                                
+                                response_text = (
+                                    f"🏪 <b>Status da Loja iFood</b>\n\n"
+                                    f"{status_emoji} <b>Status:</b> {status.upper()}\n"
+                                )
+                                
+                                if action != 'status':
+                                    response_text += f"✅ <b>Ação:</b> {action}\n"
+                                
+                                duration = result.get('duration')
+                                if duration:
+                                    response_text += f"⏰ <b>Duração:</b> {duration}\n"
+                                    
+                            elif intent.action == "confirm_order":
+                                order_id = result.get('order_id')
+                                response_text = (
+                                    f"✅ <b>Pedido Confirmado!</b>\n\n"
+                                    f"📦 <b>Pedido:</b> #{order_id}\n"
+                                    f"🕐 <b>Confirmado em:</b> {datetime.now().strftime('%H:%M')}\n"
+                                    f"⏱️ <b>Tempo estimado:</b> 25 minutos"
+                                )
+                                
+                            elif intent.action == "cancel_order":
+                                order_id = result.get('order_id')
+                                reason = result.get('reason', 'Cancelado pelo restaurante')
+                                response_text = (
+                                    f"❌ <b>Pedido Cancelado</b>\n\n"
+                                    f"📦 <b>Pedido:</b> #{order_id}\n"
+                                    f"📝 <b>Motivo:</b> {reason}\n"
+                                    f"🕐 <b>Cancelado em:</b> {datetime.now().strftime('%H:%M')}"
+                                )
+                                
+                            else:
+                                response_text = (
+                                    f"✅ <b>Ação executada:</b> {intent.action}\n\n"
+                                    f"📋 <b>Resultado:</b> {result.get('message', 'Sucesso')}"
+                                )
                         else:
+                            # Erro na execução
+                            error = result.get('error', 'Erro desconhecido')
                             response_text = (
-                                f"🤖 Entendi que você quer: {intent.action}\n"
-                                f"📋 Domínio: {intent.domain}\n"
-                                f"🎯 Confiança: {intent.confidence:.0%}\n\n"
-                                "🔧 Retail Agent em implementação..."
+                                f"❌ <b>Erro ao executar ação</b>\n\n"
+                                f"🔧 <b>Ação:</b> {intent.action}\n"
+                                f"📝 <b>Erro:</b> {error}\n\n"
+                                "Tente novamente em alguns segundos."
                             )
                     elif intent.domain == "general":
                         if intent.action == "greeting":
