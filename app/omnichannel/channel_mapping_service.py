@@ -5,7 +5,7 @@ Maps channel-specific user identifiers (Telegram ID, WhatsApp number, etc)
 to universal email identifiers for cross-channel context preservation.
 """
 
-from typing import Optional
+from typing import Optional, Dict, Any
 from app.omnichannel.models import ChannelType
 
 
@@ -58,7 +58,30 @@ class ChannelMappingService:
             channel_user_id: User ID from the channel
             email: Email address to map to
         """
-        await self.repository.create_or_update(
+        await self.repository.create_mapping(
+            channel=channel.value,
+            channel_user_id=channel_user_id,
+            email=email
+        )
+    
+    async def create_mapping(
+        self,
+        email: str,
+        channel: str,
+        channel_user_id: str
+    ) -> Dict[str, Any]:
+        """
+        Create mapping from channel ID to email (alias for compatibility).
+        
+        Args:
+            email: Email address
+            channel: Channel type as string
+            channel_user_id: User ID from the channel
+            
+        Returns:
+            Created mapping
+        """
+        return await self.repository.create_mapping(
             channel=channel,
             channel_user_id=channel_user_id,
             email=email
