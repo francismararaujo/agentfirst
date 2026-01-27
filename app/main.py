@@ -257,8 +257,92 @@ async def telegram_webhook(request: Request):
         await telegram.send_typing_indicator(chat_id)
 
         try:
-            # For MVP, just echo the message back
-            response_text = f"Echo: {text}"
+            # Check if message is email for registration
+            if "@" in text and "." in text and len(text.split()) == 1:
+                # User is sending email for registration
+                email = text.strip().lower()
+                
+                # Validate email
+                import re
+                email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                
+                if re.match(email_pattern, email):
+                    # Check if email already exists
+                    from app.omnichannel.database.repositories import UserRepository
+                    from app.omnichannel.database.models import User, UserTier
+                    
+                    user_repo = UserRepository()
+                    existing_user = await user_repo.get_by_email(email)
+                    
+                    if existing_user:
+                        # User exists, link Telegram ID
+                        if not existing_user.telegram_id:
+                            await user_repo.update(email, {"telegram_id": user_id})
+                            response_text = (
+                                f"✅ Perfeito! Vinculei seu Telegram ao email: {email}\n\n"
+                                "🍔 Agora você pode usar o AgentFirst!\n\n"
+                                "Experimente:\n"
+                                "• 'Quantos pedidos tenho?'\n"
+                                "• 'Qual meu faturamento hoje?'"
+                            )
+                        else:
+                            response_text = (
+                                f"✅ Email {email} já está cadastrado!\n\n"
+                                "🍔 Você já pode usar o AgentFirst!"
+                            )
+                    else:
+                        # Create new user
+                        new_user = User(
+                            email=email,
+                            telegram_id=user_id,
+                            tier=UserTier.FREE
+                        )
+                        await user_repo.create(new_user)
+                        
+                        response_text = (
+                            f"🎉 Cadastro realizado com sucesso!\n\n"
+                            f"📧 Email: {email}\n"
+                            f"🎯 Tier: Gratuito (100 mensagens/mês)\n\n"
+                            "🍔 Agora você pode gerenciar seus pedidos do iFood!\n\n"
+                            "Experimente:\n"
+                            "• 'Quantos pedidos tenho?'\n"
+                            "• 'Qual meu faturamento hoje?'\n"
+                            "• 'Feche a loja por 30 minutos'"
+                        )
+                else:
+                    response_text = (
+                        "❌ Email inválido!\n\n"
+                        "📧 Por favor, envie um email válido no formato:\n"
+                        "exemplo@dominio.com"
+                    )
+            else:
+                # Check if user is already registered
+                from app.omnichannel.database.repositories import UserRepository
+                
+                user_repo = UserRepository()
+                existing_user = await user_repo.get_by_telegram_id(user_id)
+                
+                if not existing_user:
+                    # User not registered
+                    if text.lower() in ["oi", "olá", "hello", "hi", "começar", "start"]:
+                        response_text = (
+                            "👋 Olá! Bem-vindo ao AgentFirst!\n\n"
+                            "🍔 Sou seu assistente para gerenciar pedidos do iFood.\n\n"
+                            "Para começar, preciso do seu email para identificá-lo em todos os canais.\n\n"
+                            "📧 Por favor, envie seu email:"
+                        )
+                    else:
+                        response_text = (
+                            "🔐 Para usar o AgentFirst, preciso do seu email primeiro.\n\n"
+                            "📧 Por favor, envie seu email:"
+                        )
+                else:
+                    # User registered - simple echo for now (MVP)
+                    response_text = (
+                        f"✅ Mensagem recebida!\n\n"
+                        f"📝 Você disse: {text}\n\n"
+                        f"🚀 Em breve vou processar sua mensagem com IA!"
+                    )
             
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}")
