@@ -79,7 +79,10 @@ class OmnichannelInterface:
         self.telegram_service = telegram_service
         
         # Initialize core services
-        self.auth_service = AuthService()
+        from app.omnichannel.authentication.auth_service import AuthConfig
+        auth_config = AuthConfig(region="us-east-1", users_table="users")
+        self.auth_service = AuthService(auth_config)
+        
         self.session_manager = SessionManager()
         self.memory_service = MemoryService()
         self.user_repository = UserRepository()
