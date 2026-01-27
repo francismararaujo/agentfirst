@@ -462,7 +462,7 @@ class OmnichannelInterface:
             # Create channel mapping
             await self.channel_mapping.create_mapping(
                 email=email,
-                channel=channel,
+                channel=channel.value,  # Convert ChannelType to string
                 channel_user_id=channel_user_id,
                 metadata=metadata
             )
@@ -598,18 +598,22 @@ class OmnichannelInterface:
         channels = {}
         
         try:
-            # Get user to check for Telegram ID
-            user = await self.user_repository.get_by_email(email)
+            # Get all channel mappings for this email
+            channel_mappings = await self.channel_mapping.get_channels_for_email(email)
             
-            if user and hasattr(user, 'telegram_id') and user.telegram_id:
-                channels[ChannelType.TELEGRAM] = {
-                    "chat_id": str(user.telegram_id),
-                    "user_id": str(user.telegram_id)
-                }
-            
-            # TODO: Add logic to get other channels (WhatsApp, Web, App)
-            # This would query the channel_mapping table for all channels
-            # associated with this email
+            # Convert to ChannelType keys
+            for channel_str, channel_user_id in channel_mappings.items():
+                if channel_str.lower() == 'telegram':
+                    channels[ChannelType.TELEGRAM] = {
+                        "chat_id": channel_user_id,
+                        "user_id": channel_user_id
+                    }
+                # TODO: Add other channel types (WhatsApp, Web, App)
+                # elif channel_str.lower() == 'whatsapp':
+                #     channels[ChannelType.WHATSAPP] = {
+                #         "phone": channel_user_id,
+                #         "user_id": channel_user_id
+                #     }
             
         except Exception as e:
             logger.error(f"Error getting user channels: {str(e)}")

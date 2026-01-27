@@ -452,6 +452,27 @@ class ChannelMappingRepository(DynamoDBRepository):
             logger.error(f"Error getting channel mapping: {str(e)}")
             return None
 
+    async def get_by_email(self, email: str) -> List[Dict[str, Any]]:
+        """Get all channel mappings for an email address"""
+        try:
+            # For now, use UserRepository to find user and return their channels
+            # In the future, this could be a separate table with multiple channels per user
+            user_repo = UserRepository()
+            user = await user_repo.get_by_email(email)
+            
+            mappings = []
+            if user and hasattr(user, 'telegram_id') and user.telegram_id:
+                mappings.append({
+                    'email': user.email,
+                    'channel': 'telegram',
+                    'channel_user_id': str(user.telegram_id)
+                })
+            
+            return mappings
+        except Exception as e:
+            logger.error(f"Error getting channel mappings by email: {str(e)}")
+            return []
+
     async def create_mapping(self, channel: str, channel_user_id: str, email: str) -> Dict[str, Any]:
         """Create channel mapping (for now, just return the mapping)"""
         return {'email': email, 'channel': channel, 'channel_user_id': channel_user_id}

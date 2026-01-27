@@ -41,8 +41,8 @@ class ChannelMappingService:
         Returns:
             Email address if mapping exists, None otherwise
         """
-        mapping = await self.repository.get_by_channel_id(channel, channel_user_id)
-        return mapping.email if mapping else None
+        mapping = await self.repository.get_by_channel_id(channel.value, channel_user_id)
+        return mapping.get('email') if mapping else None
     
     async def map_channel_to_email(
         self,
@@ -68,7 +68,8 @@ class ChannelMappingService:
         self,
         email: str,
         channel: str,
-        channel_user_id: str
+        channel_user_id: str,
+        metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Create mapping from channel ID to email (alias for compatibility).
@@ -77,10 +78,12 @@ class ChannelMappingService:
             email: Email address
             channel: Channel type as string
             channel_user_id: User ID from the channel
+            metadata: Optional metadata (ignored for now)
             
         Returns:
             Created mapping
         """
+        # Note: metadata is ignored for now since repository doesn't support it
         return await self.repository.create_mapping(
             channel=channel,
             channel_user_id=channel_user_id,
@@ -102,6 +105,6 @@ class ChannelMappingService:
         """
         mappings = await self.repository.get_by_email(email)
         return {
-            mapping.channel.value: mapping.channel_user_id
+            mapping['channel']: mapping['channel_user_id']
             for mapping in mappings
         }
