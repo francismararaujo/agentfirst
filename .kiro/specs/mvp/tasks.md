@@ -426,171 +426,171 @@
 ## Fase 7: iFood Connector - Homologation Compliance (Semana 3)
 
 ### 7.1 Authentication (5 criteria)
-- [ ] OAuth 2.0 server-to-server (clientId, clientSecret)
-- [ ] Access tokens (3h expiration)
-- [ ] Refresh tokens (7 days expiration)
-- [ ] Token refresh at 80% of expiration
-- [ ] Handle 401 Unauthorized errors
-- [ ] Testes: 15+ testes
+- [x] OAuth 2.0 server-to-server (clientId, clientSecret)
+- [x] Access tokens (3h expiration)
+- [x] Refresh tokens (7 days expiration)
+- [x] Token refresh at 80% of expiration
+- [x] Handle 401 Unauthorized errors
+- [x] Testes: 15+ testes
 
 ### 7.2 Merchant Management (6 criteria)
-- [ ] Query `/status` endpoint
-- [ ] Parse status states (OK, WARNING, CLOSED, ERROR)
-- [ ] Identify unavailability reasons
-- [ ] Configure operating hours
-- [ ] Cache status (5 min) and availability (1 hour)
-- [ ] Handle rate limiting (429)
-- [ ] Testes: 10+ testes
+- [x] Query `/status` endpoint
+- [x] Parse status states (OK, WARNING, CLOSED, ERROR)
+- [x] Identify unavailability reasons
+- [x] Configure operating hours
+- [x] Cache status (5 min) and availability (1 hour)
+- [x] Handle rate limiting (429)
+- [x] Testes: 10+ testes
 
 ### 7.3 Order Polling (CRITICAL - 34+ criteria)
-- [ ] Poll `/polling` endpoint every 30 seconds (MANDATORY)
-- [ ] Use x-polling-merchants header
-- [ ] Filter events by merchant
-- [ ] Handle scheduler errors
-- [ ] Testes: 20+ testes
+- [x] Poll `/polling` endpoint every 30 seconds (MANDATORY)
+- [x] Use x-polling-merchants header
+- [x] Filter events by merchant
+- [x] Handle scheduler errors
+- [x] Testes: 20+ testes
 
 ### 7.4 Event Acknowledgment (CRITICAL - 10 criteria)
-- [ ] Acknowledge EVERY event received (MANDATORY)
-- [ ] Send acknowledgment immediately after polling
-- [ ] Retry acknowledgment on failure
-- [ ] Track acknowledgment status
-- [ ] Implement deduplication (MANDATORY)
-- [ ] Validate webhook signatures (HMAC-SHA256)
-- [ ] Testes: 20+ testes
+- [x] Acknowledge EVERY event received (MANDATORY)
+- [x] Send acknowledgment immediately after polling
+- [x] Retry acknowledgment on failure
+- [x] Track acknowledgment status
+- [x] Implement deduplication (MANDATORY)
+- [x] Validate webhook signatures (HMAC-SHA256)
+- [x] Testes: 20+ testes
 
 ### 7.5 Order Types Support (34+ criteria)
-- [ ] DELIVERY + IMMEDIATE orders
-- [ ] DELIVERY + SCHEDULED orders (display scheduled date/time - MANDATORY)
-- [ ] TAKEOUT orders (display pickup time)
-- [ ] Parse and display all order details
-- [ ] Testes: 25+ testes
+- [x] DELIVERY + IMMEDIATE orders
+- [x] DELIVERY + SCHEDULED orders (display scheduled date/time - MANDATORY)
+- [x] TAKEOUT orders (display pickup time)
+- [x] Parse and display all order details
+- [x] Testes: 25+ testes
 
 ### 7.6 Order Confirmation & Cancellation
-- [ ] Confirm orders via iFood API
-- [ ] Query `/cancellationReasons` endpoint
-- [ ] Display cancellation reasons (MANDATORY)
-- [ ] Cancel with valid reason only
-- [ ] Handle cancellation responses
-- [ ] Testes: 15+ testes
+- [x] Confirm orders via iFood API
+- [x] Query `/cancellationReasons` endpoint
+- [x] Display cancellation reasons (MANDATORY)
+- [x] Cancel with valid reason only
+- [x] Handle cancellation responses
+- [x] Testes: 15+ testes
 
 ### 7.7 Payment Methods (9 criteria)
-- [ ] Credit/Debit card (display brand, cAut, intermediator CNPJ)
-- [ ] Cash (display change amount)
-- [ ] PIX support
-- [ ] Digital Wallet (Apple Pay, Google Pay, Samsung Pay)
-- [ ] Meal Voucher, Food Voucher, Gift Card
-- [ ] Parse and display all payment details
-- [ ] Testes: 15+ testes
+- [x] Credit/Debit card (display brand, cAut, intermediator CNPJ)
+- [x] Cash (display change amount)
+- [x] PIX support
+- [x] Digital Wallet (Apple Pay, Google Pay, Samsung Pay)
+- [x] Meal Voucher, Food Voucher, Gift Card
+- [x] Parse and display all payment details
+- [x] Testes: 15+ testes
 
 ### 7.8 Order Details & Observations (9 criteria)
-- [ ] Parse item observations
-- [ ] Parse delivery observations
-- [ ] Parse pickup code (display and validate)
-- [ ] Parse CPF/CNPJ (auto-fill if required)
-- [ ] Parse coupon discounts (display sponsor: iFood/Loja/Externo/Rede)
-- [ ] Display all details in order
-- [ ] Testes: 15+ testes
+- [x] Parse item observations
+- [x] Parse delivery observations
+- [x] Parse pickup code (display and validate)
+- [x] Parse CPF/CNPJ (auto-fill if required)
+- [x] Parse coupon discounts (display sponsor: iFood/Loja/Externo/Rede)
+- [x] Display all details in order
+- [x] Testes: 15+ testes
 
 ### 7.9 Duplicate Detection & Deduplication (MANDATORY)
-- [ ] Track processed events by ID
-- [ ] Detect duplicate events
-- [ ] Discard duplicates (MANDATORY)
-- [ ] Log deduplication
-- [ ] Testes: 10+ testes
+- [x] Track processed events by ID
+- [x] Detect duplicate events
+- [x] Discard duplicates (MANDATORY)
+- [x] Log deduplication
+- [x] Testes: 10+ testes
 
 ### 7.10 Status Sync from Other Apps
-- [ ] Receive status updates from other apps
-- [ ] Update order status
-- [ ] Handle status conflicts
-- [ ] Log status updates
-- [ ] Testes: 10+ testes
+- [x] Receive status updates from other apps
+- [x] Update order status
+- [x] Handle status conflicts
+- [x] Log status updates
+- [x] Testes: 10+ testes
 
 ### 7.11 Shipping Support (22+ criteria)
-- [ ] Poll shipping events every 30 seconds
-- [ ] Acknowledge shipping events
-- [ ] Handle on-demand orders (DELIVERY, IMMEDIATE, POS)
-- [ ] Handle address change requests
-- [ ] Validate pickup codes
-- [ ] Testes: 15+ testes
+- [x] Poll shipping events every 30 seconds
+- [x] Acknowledge shipping events
+- [x] Handle on-demand orders (DELIVERY, IMMEDIATE, POS)
+- [x] Handle address change requests
+- [x] Validate pickup codes
+- [x] Testes: 15+ testes
 
 ### 7.12 Financial Integration (7 criteria)
-- [ ] Query `/sales` endpoint
-- [ ] Filter by date range
-- [ ] Parse sales information
-- [ ] Query financial events
-- [ ] Track payments, refunds, adjustments
-- [ ] Testes: 10+ testes
+- [x] Query `/sales` endpoint
+- [x] Filter by date range
+- [x] Parse sales information
+- [x] Query financial events
+- [x] Track payments, refunds, adjustments
+- [x] Testes: 10+ testes
 
 ### 7.13 Item/Catalog Management (6 criteria)
-- [ ] POST `/item/v1.0/ingestion/{merchantId}?reset=false`
-- [ ] Create new items
-- [ ] Update item information
-- [ ] PATCH partial updates
-- [ ] Reactivate items
-- [ ] Testes: 10+ testes
+- [x] POST `/item/v1.0/ingestion/{merchantId}?reset=false`
+- [x] Create new items
+- [x] Update item information
+- [x] PATCH partial updates
+- [x] Reactivate items
+- [x] Testes: 10+ testes
 
 ### 7.14 Promotion Management (6 criteria)
-- [ ] POST `/promotions`
-- [ ] Receive 202 Accepted response
-- [ ] Track aggregationId
-- [ ] Monitor promotion status
-- [ ] Handle promotion updates
-- [ ] Testes: 10+ testes
+- [x] POST `/promotions`
+- [x] Receive 202 Accepted response
+- [x] Track aggregationId
+- [x] Monitor promotion status
+- [x] Handle promotion updates
+- [x] Testes: 10+ testes
 
 ### 7.15 Picking Operations (9 criteria)
-- [ ] POST `/startSeparation` (initialize picking)
-- [ ] POST `/orders/:id/items` (add item)
-- [ ] POST `/items/{uniqueId}` (modify item)
-- [ ] DELETE `/items/{uniqueId}` (remove item)
-- [ ] POST `/endSeparation` (finalize picking)
-- [ ] Query updated order after separation
-- [ ] MANDATORY: Enforce strict order (Start → Edit → End → Query)
-- [ ] Testes: 15+ testes
+- [x] POST `/startSeparation` (initialize picking)
+- [x] POST `/orders/:id/items` (add item)
+- [x] POST `/items/{uniqueId}` (modify item)
+- [x] DELETE `/items/{uniqueId}` (remove item)
+- [x] POST `/endSeparation` (finalize picking)
+- [x] Query updated order after separation
+- [x] MANDATORY: Enforce strict order (Start → Edit → End → Query)
+- [x] Testes: 15+ testes
 
 ### 7.16 Rate Limiting & Error Handling
-- [ ] Handle 429 Rate Limited responses
-- [ ] Implement exponential backoff
-- [ ] Track requests per endpoint
-- [ ] Handle timeouts
-- [ ] Implement circuit breaker pattern
-- [ ] Comprehensive logging
-- [ ] Testes: 15+ testes
+- [x] Handle 429 Rate Limited responses
+- [x] Implement exponential backoff
+- [x] Track requests per endpoint
+- [x] Handle timeouts
+- [x] Implement circuit breaker pattern
+- [x] Comprehensive logging
+- [x] Testes: 15+ testes
 
 ### 7.17 Performance & Reliability
-- [ ] Polling requests: < 5 seconds
-- [ ] Order confirmation: < 2 seconds
-- [ ] Event processing: < 1 second
-- [ ] Retry failed requests
-- [ ] Support graceful degradation
-- [ ] Testes: 10+ testes
+- [x] Polling requests: < 5 seconds
+- [x] Order confirmation: < 2 seconds
+- [x] Event processing: < 1 second
+- [x] Retry failed requests
+- [x] Support graceful degradation
+- [x] Testes: 10+ testes
 
 ### 7.18 Security & Compliance
-- [ ] Use HTTPS for all requests
-- [ ] Validate webhook signatures (HMAC-SHA256)
-- [ ] Store credentials securely (Secrets Manager)
-- [ ] Implement rate limiting
-- [ ] Handle sensitive data
-- [ ] Testes: 10+ testes
+- [x] Use HTTPS for all requests
+- [x] Validate webhook signatures (HMAC-SHA256)
+- [x] Store credentials securely (Secrets Manager)
+- [x] Implement rate limiting
+- [x] Handle sensitive data
+- [x] Testes: 10+ testes
 
 ### 7.19 Omnichannel Integration (5 criteria)
-- [ ] Publish order events to Event Bus
-- [ ] Omnichannel adapts notifications for Telegram
-- [ ] Support future channels (WhatsApp, Web, Mobile, Email, SMS)
-- [ ] Maintain user channel preferences
-- [ ] Cross-channel context preservation by email
-- [ ] Testes: 15+ testes
+- [x] Publish order events to Event Bus
+- [x] Omnichannel adapts notifications for Telegram
+- [x] Support future channels (WhatsApp, Web, Mobile, Email, SMS)
+- [x] Maintain user channel preferences
+- [x] Cross-channel context preservation by email
+- [x] Testes: 15+ testes
 
 ### 7.20 Homologation Readiness
-- [ ] Professional Account (CNPJ) configured
-- [ ] Test store ID and name ready
-- [ ] Stable internet access verified
-- [ ] All 105+ criteria implemented
-- [ ] 580+ tests passing
-- [ ] 100% code coverage for critical paths
-- [ ] Zero security vulnerabilities
-- [ ] Comprehensive documentation
-- [ ] Ready for homologation call (~45 minutes)
-- [ ] Testes: 20+ testes
+- [x] Professional Account (CNPJ) configured
+- [x] Test store ID and name ready
+- [x] Stable internet access verified
+- [x] All 105+ criteria implemented
+- [x] 580+ tests passing
+- [x] 100% code coverage for critical paths
+- [x] Zero security vulnerabilities
+- [x] Comprehensive documentation
+- [x] Ready for homologation call (~45 minutes)
+- [x] Testes: 20+ testes
 
 ---
 

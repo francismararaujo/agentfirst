@@ -271,16 +271,18 @@ async def telegram_webhook(request: Request):
                     # Usuário já cadastrado - processar comando
                     from app.core.brain import Brain, Context
                     from app.domains.retail.retail_agent import RetailAgent
-                    from app.domains.retail.mock_ifood_connector import MockiFoodConnector
+                    from app.domains.retail.ifood_connector_extended import iFoodConnectorExtended
                     from app.omnichannel.models import ChannelType
+                    from app.config.secrets_manager import SecretsManager
                     
                     # Inicializar Brain e Retail Agent
                     brain = Brain()
                     retail_agent = RetailAgent()
                     
-                    # Registrar mock iFood connector
-                    mock_ifood = MockiFoodConnector()
-                    retail_agent.register_connector('ifood', mock_ifood)
+                    # Registrar iFood connector real
+                    secrets_manager = SecretsManager()
+                    ifood_connector = iFoodConnectorExtended(secrets_manager)
+                    retail_agent.register_connector('ifood', ifood_connector)
                     
                     # Registrar Retail Agent no Brain
                     brain.register_agent('retail', retail_agent)
