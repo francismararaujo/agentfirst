@@ -178,38 +178,184 @@ async def telegram_webhook(request: Request):
 
         logger.info(f"Processing message from user {user_id}: {text}")
 
-        # Initialize Telegram service
+        # Initialize services
         telegram = TelegramService()
-
+        
         # Send typing indicator
         await telegram.send_typing_indicator(chat_id)
 
-        # TODO: Full implementation
-        # 1. Authenticate user by Telegram ID → email
-        # 2. Create/retrieve session
-        # 3. Process message through Brain
-        # 4. Send response back to Telegram
-
-        # For now, send a simple acknowledgment
-        if text.lower() in ["oi", "olá", "hello", "hi"]:
+        try:
+            # 1. AUTENTICAÇÃO COM COMPONENTES EXISTENTES
+            from app.omnichannel.database.repositories import UserRepository
+            from app.omnichannel.database.models import User, UserTier
+            
+            user_repo = UserRepository()
+            
+            # Verificar se usuário existe por Telegram ID
+            # Primeiro, vamos buscar na tabela se já existe um usuário com este telegram_id
+            # Como não temos método direto, vamos implementar a lógica de cadastro
+            
+            # Verificar se a mensagem é um email para cadastro
+            if "@" in text and "." in text and len(text.split()) == 1:
+                # Usuário está enviando email para cadastro
+                email = text.strip().lower()
+                
+                # Validar email
+                import re
+                email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                if re.match(email_pattern, email):
+                    # Verificar se email já existe
+                    existing_user = await user_repo.get_by_email(email)
+                    
+                    if existing_user:
+                        # Usuário existe, vincular Telegram ID
+                        if not existing_user.telegram_id:
+                            await user_repo.update(email, {"telegram_id": user_id})
+                            response_text = (
+                                f"✅ Perfeito! Vinculei seu Telegram ao email: {email}\n\n"
+                                "🍔 Agora você pode usar o AgentFirst!\n\n"
+                                "Experimente:\n"
+                                "• 'Quantos pedidos tenho?'\n"
+                                "• 'Qual meu faturamento hoje?'"
+                            )
+                        else:
+                            response_text = (
+                                f"✅ Email {email} já está cadastrado!\n\n"
+                                "🍔 Você já pode usar o AgentFirst!"
+                            )
+                    else:
+                        # Criar novo usuário
+                        new_user = User(
+                            email=email,
+                            telegram_id=user_id,
+                            tier=UserTier.FREE
+                        )
+                        await user_repo.create(new_user)
+                        
+                        response_text = (
+                            f"🎉 Cadastro realizado com sucesso!\n\n"
+                            f"📧 Email: {email}\n"
+                            f"🎯 Tier: Gratuito (100 mensagens/mês)\n\n"
+                            "🍔 Agora você pode gerenciar seus pedidos do iFood!\n\n"
+                            "Experimente:\n"
+                            "• 'Quantos pedidos tenho?'\n"
+                            "• 'Qual meu faturamento hoje?'\n"
+                            "• 'Feche a loja por 30 minutos'"
+                        )
+                else:
+                    response_text = (
+                        "❌ Email inválido!\n\n"
+                        "📧 Por favor, envie um email válido no formato:\n"
+                        "exemplo@dominio.com"
+                    )
+            else:
+                # Verificar se usuário já está cadastrado
+                existing_user = await user_repo.get_by_telegram_id(user_id)
+                
+                if not existing_user:
+                    # Usuário não cadastrado
+                    if text.lower() in ["oi", "olá", "hello", "hi", "começar", "start"]:
+                        response_text = (
+                            "👋 Olá! Bem-vindo ao AgentFirst!\n\n"
+                            "🍔 Sou seu assistente para gerenciar pedidos do iFood.\n\n"
+                            "Para começar, preciso do seu email para identificá-lo em todos os canais.\n\n"
+                            "📧 Por favor, envie seu email:"
+                        )
+                    else:
+                        response_text = (
+                            "🔐 Para usar o AgentFirst, preciso do seu email primeiro.\n\n"
+                            "📧 Por favor, envie seu email:"
+                        )
+                else:
+                    # Usuário já cadastrado - processar comando
+                    from app.core.brain import Brain
+                    
+                    brain = Brain()
+                    
+                    # Classificar intenção
+                    intent = await brain.classify_intent(text, existing_user.email)
+                    
+                    if intent.domain == "retail":
+                        # TODO: Implementar Retail Agent
+                        if intent.action == "check_orders":
+                            response_text = (
+                                f"🍔 Consultando seus pedidos no iFood...\n\n"
+                                "🔧 Retail Agent em implementação!\n\n"
+                                "Em breve mostrarei:\n"
+                                "• Pedidos pendentes\n"
+                                "• Status de cada pedido\n"
+                                "• Valores e detalhes"
+                            )
+                        elif intent.action == "check_revenue":
+                            response_text = (
+                                f"💰 Consultando seu faturamento...\n\n"
+                                "🔧 Retail Agent em implementação!\n\n"
+                                "Em breve mostrarei:\n"
+                                "• Faturamento do dia/semana/mês\n"
+                                "• Número de pedidos\n"
+                                "• Ticket médio"
+                            )
+                        elif intent.action == "manage_store":
+                            response_text = (
+                                f"🏪 Gerenciando sua loja...\n\n"
+                                "🔧 Retail Agent em implementação!\n\n"
+                                "Em breve poderei:\n"
+                                "• Abrir/fechar loja\n"
+                                "• Pausar pedidos temporariamente\n"
+                                "• Configurar horários"
+                            )
+                        else:
+                            response_text = (
+                                f"🤖 Entendi que você quer: {intent.action}\n"
+                                f"📋 Domínio: {intent.domain}\n"
+                                f"🎯 Confiança: {intent.confidence:.0%}\n\n"
+                                "🔧 Retail Agent em implementação..."
+                            )
+                    elif intent.domain == "general":
+                        if intent.action == "greeting":
+                            response_text = (
+                                f"👋 Olá {existing_user.email}!\n\n"
+                                "🍔 Como posso ajudar com seus pedidos do iFood hoje?\n\n"
+                                "Experimente:\n"
+                                "• 'Quantos pedidos tenho?'\n"
+                                "• 'Qual meu faturamento hoje?'\n"
+                                "• 'Feche a loja por 30 minutos'"
+                            )
+                        elif intent.action == "help":
+                            response_text = (
+                                "🆘 AJUDA - AgentFirst\n\n"
+                                "🍔 PEDIDOS:\n"
+                                "• 'Quantos pedidos tenho?'\n"
+                                "• 'Confirme o pedido 123'\n"
+                                "• 'Cancele o último pedido'\n\n"
+                                "💰 FATURAMENTO:\n"
+                                "• 'Qual meu faturamento hoje?'\n"
+                                "• 'Relatório da semana'\n\n"
+                                "🏪 LOJA:\n"
+                                "• 'Feche a loja por 30min'\n"
+                                "• 'Abra a loja'"
+                            )
+                        else:
+                            response_text = (
+                                f"🤖 Olá {existing_user.email}!\n\n"
+                                f"Recebi: <b>{text}</b>\n\n"
+                                "🔧 Brain funcionando! Classificação:\n"
+                                f"📋 Domínio: {intent.domain}\n"
+                                f"⚡ Ação: {intent.action}\n"
+                                f"🎯 Confiança: {intent.confidence:.0%}"
+                            )
+                    else:
+                        response_text = (
+                            f"🤖 Brain classificou como: {intent.domain}.{intent.action}\n\n"
+                            "🔧 Este domínio ainda não foi implementado."
+                        )
+        
+        except Exception as e:
+            logger.error(f"Error processing message: {str(e)}")
             response_text = (
-                "👋 Olá! Eu sou o AgentFirst!\n\n"
-                "🍔 Sou seu assistente para gerenciar pedidos do iFood.\n\n"
-                "⚙️ Sistema em desenvolvimento...\n"
-                "Em breve você poderá:\n"
-                "• Verificar pedidos pendentes\n"
-                "• Confirmar pedidos automaticamente\n"
-                "• Ver faturamento em tempo real"
+                "❌ Ops! Algo deu errado.\n\n"
+                "🔧 Tente novamente em alguns segundos."
             )
-        elif "@" in text and "." in text:
-            # Usuário enviou um email
-            response_text = (
-                f"📧 Recebi seu email: {text}\n\n"
-                "✅ Em breve implementaremos o cadastro completo!\n\n"
-                "🔧 Por enquanto, continue testando o bot..."
-            )
-        else:
-            response_text = f"✅ Recebi sua mensagem: <b>{text}</b>\n\n⚙️ Sistema em desenvolvimento..."
         
         logger.info(f"Sending response to chat {chat_id}")
 

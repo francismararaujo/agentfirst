@@ -56,6 +56,24 @@ class UserRepository(DynamoDBRepository):
             logger.error(f"Error getting user: {str(e)}")
             raise
 
+    async def get_by_telegram_id(self, telegram_id: int) -> Optional[User]:
+        """Get user by Telegram ID"""
+        try:
+            table = self.get_table(settings.DYNAMODB_USERS_TABLE)
+            
+            # Scan table for telegram_id (not ideal, but works for MVP)
+            response = table.scan(
+                FilterExpression='telegram_id = :telegram_id',
+                ExpressionAttributeValues={':telegram_id': telegram_id}
+            )
+            
+            if response['Items']:
+                return User.from_dynamodb(response['Items'][0])
+            return None
+        except ClientError as e:
+            logger.error(f"Error getting user by telegram_id: {str(e)}")
+            raise
+
     async def update(self, email: str, updates: Dict[str, Any]) -> User:
         """Update user"""
         try:
