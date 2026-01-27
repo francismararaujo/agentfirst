@@ -35,5 +35,8 @@ COPY --from=builder /build ${LAMBDA_TASK_ROOT}
 # Copy application code
 COPY app/ ${LAMBDA_TASK_ROOT}/app/
 
+# Copy Lambda handler entry point
+COPY lambda_handler.py ${LAMBDA_TASK_ROOT}/
+
 # Set Lambda handler
-CMD ["app.lambda_handler.lambda_handler"]
+CMD ["lambda_handler.lambda_handler"]
