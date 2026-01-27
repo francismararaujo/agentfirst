@@ -23,6 +23,7 @@ from app.config.settings import settings
 from app.core.request_validator import RequestValidator
 from app.omnichannel.telegram_service import TelegramService
 from app.core.auditor import Auditor, AuditCategory, AuditLevel
+from app.core.supervisor import Supervisor
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -276,9 +277,10 @@ async def telegram_webhook(request: Request):
                     from app.omnichannel.models import ChannelType
                     from app.config.secrets_manager import SecretsManager
                     
-                    # Inicializar Brain e Retail Agent com Auditor
+                    # Inicializar Brain e Retail Agent com Auditor e Supervisor
                     auditor = Auditor()
-                    brain = Brain(auditor=auditor)
+                    supervisor = Supervisor(auditor=auditor, telegram_service=telegram)
+                    brain = Brain(auditor=auditor, supervisor=supervisor)
                     retail_agent = RetailAgent(auditor=auditor)
                     
                     # Registrar iFood connector real
@@ -300,8 +302,53 @@ async def telegram_webhook(request: Request):
                         }
                     )
                     
-                    # Processar mensagem via Brain (com auditoria integrada)
-                    response_text = await brain.process(text, context)
+                    # Configurar supervisor padrão (usar o próprio chat do usuário como supervisor para demo)
+                    brain.configure_supervisor(
+                        supervisor_id="default",
+                        name="Supervisor Padrão",
+                        telegram_chat_id=str(chat_id),
+                        specialties=["retail", "general"],
+                        priority_threshold=1
+                    )
+                    
+                    # Verificar se é comando de supervisão
+                    if text.startswith('/approve ') or text.startswith('/reject '):
+                        parts = text.split(' ', 2)
+                        command = parts[0][1:]  # Remove '/'
+                        escalation_id = parts[1] if len(parts) > 1 else None
+                        feedback = parts[2] if len(parts) > 2 else None
+                        
+                        if escalation_id:
+                            success = await brain.process_human_decision(
+                                escalation_id=escalation_id,
+                                decision=command,
+                                feedback=feedback,
+                                supervisor_id="default"
+                            )
+                            
+                            if success:
+                                response_text = (
+                                    f"✅ <b>Decisão processada!</b>\n\n"
+                                    f"📋 Escalação: {escalation_id}\n"
+                                    f"🎯 Decisão: {command.upper()}\n"
+                                    f"📝 Feedback: {feedback or 'Nenhum'}"
+                                )
+                            else:
+                                response_text = (
+                                    f"❌ <b>Erro ao processar decisão</b>\n\n"
+                                    f"📋 Escalação: {escalation_id}\n"
+                                    f"Verifique se o ID está correto e se a escalação ainda está pendente."
+                                )
+                        else:
+                            response_text = (
+                                "❌ <b>Formato inválido</b>\n\n"
+                                "Use:\n"
+                                "• <code>/approve [escalation_id]</code>\n"
+                                "• <code>/reject [escalation_id] [motivo]</code>"
+                            )
+                    else:
+                        # Processar mensagem normal via Brain (com supervisão integrada)
+                        response_text = await brain.process(text, context)
         
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}")

@@ -11,7 +11,7 @@ Responsabilidades:
 
 import json
 import logging
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 from dataclasses import dataclass
 from datetime import datetime
 import boto3
@@ -19,6 +19,7 @@ from botocore.exceptions import ClientError
 
 from app.omnichannel.models import ChannelType
 from app.core.auditor import Auditor, AuditCategory, AuditLevel
+from app.core.supervisor import Supervisor
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +185,7 @@ class Brain:
     Orquestrador central usando Claude 3.5 Sonnet via Bedrock
     """
     
-    def __init__(self, bedrock_client=None, memory_service=None, event_bus=None, auditor=None):
+    def __init__(self, bedrock_client=None, memory_service=None, event_bus=None, auditor=None, supervisor=None):
         """
         Inicializa Brain
         
@@ -193,6 +194,7 @@ class Brain:
             memory_service: Serviço de memória (DynamoDB)
             event_bus: Event bus (SNS/SQS)
             auditor: Serviço de auditoria
+            supervisor: Supervisor (H.I.T.L.)
         """
         if bedrock_client is None:
             self.bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
@@ -202,6 +204,7 @@ class Brain:
         self.memory = memory_service
         self.event_bus = event_bus
         self.auditor = auditor or Auditor()
+        self.supervisor = supervisor or Supervisor(auditor=self.auditor)
         self.agents = {}  # Agentes por domínio
         self.model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
     
@@ -307,12 +310,67 @@ class Brain:
                 return error_message
             
             agent = self.agents[intent.domain]
+            
+            # 6. Avaliar se requer supervisão humana (H.I.T.L.)
+            proposed_decision = {
+                "domain": intent.domain,
+                "action": intent.action,
+                "connector": intent.connector,
+                "entities": intent.entities
+            }
+            
+            requires_supervision, escalation_id = await self.supervisor.evaluate_decision(
+                user_email=context.email,
+                agent=intent.domain,
+                action=intent.action,
+                proposed_decision=proposed_decision,
+                context={
+                    "user_profile": context.user_profile,
+                    "session_id": context.session_id,
+                    "channel": context.channel.value,
+                    "memory": context.memory
+                },
+                confidence=intent.confidence
+            )
+            
+            if requires_supervision:
+                # Decisão requer supervisão - retornar mensagem de espera
+                supervision_message = (
+                    f"🔍 Sua solicitação requer supervisão humana.\n\n"
+                    f"📋 ID da escalação: {escalation_id}\n"
+                    f"⏰ Aguarde a análise de um supervisor.\n\n"
+                    f"Você será notificado quando a decisão for tomada."
+                )
+                
+                # Registrar escalação na auditoria
+                await self.auditor.log_transaction(
+                    email=context.email,
+                    action="brain.escalation_required",
+                    input_data={
+                        'intent': intent.action,
+                        'domain': intent.domain,
+                        'confidence': intent.confidence
+                    },
+                    output_data={
+                        'escalation_id': escalation_id,
+                        'requires_supervision': True
+                    },
+                    agent="brain",
+                    category=AuditCategory.SYSTEM_OPERATION,
+                    level=AuditLevel.WARNING,
+                    session_id=context.session_id,
+                    channel=context.channel.value
+                )
+                
+                return supervision_message
+            
+            # 7. Executar via agente (decisão aprovada automaticamente)
             response_data = await agent.execute(intent, context)
             
-            # 6. Formatar resposta em linguagem natural
+            # 8. Formatar resposta em linguagem natural
             response = await self._format_response(response_data, intent, context)
             
-            # 7. Atualizar memória
+            # 9. Atualizar memória
             if self.memory:
                 await self.memory.update_context(context.email, {
                     'last_intent': intent.action,
@@ -322,7 +380,7 @@ class Brain:
                     'timestamp': datetime.now().isoformat()
                 })
             
-            # 8. Publicar evento
+            # 10. Publicar evento
             if self.event_bus:
                 await self.event_bus.publish(
                     topic=f"{intent.domain}.{intent.action}",
@@ -334,11 +392,11 @@ class Brain:
                     }
                 )
             
-            # 9. Calcular duração
+            # 11. Calcular duração
             end_time = datetime.now()
             duration_ms = (end_time - start_time).total_seconds() * 1000
             
-            # 10. Registrar sucesso na auditoria
+            # 12. Registrar sucesso na auditoria
             await self.auditor.log_transaction(
                 email=context.email,
                 action="brain.process_complete",
@@ -607,3 +665,55 @@ Se houver erro, explique de forma amigável.
         
         # Processar como mensagem
         await self.process(message, context)
+    
+    async def process_human_decision(
+        self,
+        escalation_id: str,
+        decision: str,
+        feedback: str = None,
+        supervisor_id: str = None
+    ) -> bool:
+        """
+        Processa decisão humana sobre escalação
+        
+        Args:
+            escalation_id: ID da escalação
+            decision: "approve" ou "reject"
+            feedback: Feedback opcional do supervisor
+            supervisor_id: ID do supervisor que decidiu
+        
+        Returns:
+            True se processado com sucesso
+        """
+        return await self.supervisor.process_human_decision(
+            escalation_id=escalation_id,
+            decision=decision,
+            feedback=feedback,
+            supervisor_id=supervisor_id
+        )
+    
+    def configure_supervisor(
+        self,
+        supervisor_id: str,
+        name: str,
+        telegram_chat_id: str,
+        specialties: List[str] = None,
+        priority_threshold: int = 1
+    ):
+        """
+        Configura um supervisor no sistema H.I.T.L.
+        
+        Args:
+            supervisor_id: ID único do supervisor
+            name: Nome do supervisor
+            telegram_chat_id: Chat ID do Telegram
+            specialties: Especialidades (retail, finance, etc)
+            priority_threshold: Prioridade mínima para notificar
+        """
+        self.supervisor.configure_supervisor(
+            supervisor_id=supervisor_id,
+            name=name,
+            telegram_chat_id=telegram_chat_id,
+            specialties=specialties,
+            priority_threshold=priority_threshold
+        )
