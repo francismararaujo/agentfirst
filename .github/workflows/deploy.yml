@@ -6,6 +6,8 @@ on:
 
 env:
   AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: 373527788609
+  ECR_REPOSITORY: agentfirst-gateway
 
 jobs:
   deploy:
@@ -21,39 +23,60 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
       
-      - name: Build and Deploy Docker Image
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Build and Push Docker Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
           echo "🐳 Building Docker image..."
-          docker build -t agentfirst-temp .
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           
-          echo "📦 Creating deployment package..."
-          docker create --name temp-container agentfirst-temp
-          docker cp temp-container:/var/task ./lambda-package
-          docker rm temp-container
+          echo "📦 Pushing to ECR..."
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
           
           echo "🚀 Updating Lambda function..."
-          cd lambda-package
-          zip -r ../deployment.zip . -x "*.pyc" "*/__pycache__/*"
-          cd ..
-          
-          # Try to update the function code directly
           aws lambda update-function-code \
             --function-name agentfirst-production \
-            --zip-file fileb://deployment.zip \
-            --region $AWS_REGION || echo "⚠️ Function update failed, but continuing..."
+            --image-uri $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            --region $AWS_REGION
+          
+          echo "⏳ Waiting for function to update..."
+          aws lambda wait function-updated \
+            --function-name agentfirst-production \
+            --region $AWS_REGION
           
           echo "✅ Deploy completed!"
       
       - name: Test deployment
         run: |
           echo "🧪 Testing endpoints..."
-          sleep 5
+          sleep 10
           
           HEALTH_URL="https://ain6spik95.execute-api.us-east-1.amazonaws.com/prod/health"
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_URL)
           
           if [ "$RESPONSE" = "200" ]; then
             echo "✅ Health check passed"
+            
+            # Test webhook
+            echo "🤖 Testing Telegram webhook..."
+            WEBHOOK_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST "https://ain6spik95.execute-api.us-east-1.amazonaws.com/prod/webhook/telegram" \
+              -H "Content-Type: application/json" \
+              -d '{"message":{"chat":{"id":123},"text":"test","from":{"id":123}}}')
+            
+            if [ "$WEBHOOK_RESPONSE" = "200" ]; then
+              echo "✅ Webhook test passed"
+            else
+              echo "⚠️ Webhook test returned $WEBHOOK_RESPONSE"
+            fi
           else
-            echo "⚠️ Health check returned $RESPONSE"
+            echo "❌ Health check failed (HTTP $RESPONSE)"
+            exit 1
           fi
