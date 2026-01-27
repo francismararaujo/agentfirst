@@ -35,10 +35,38 @@ if settings.XRAY_ENABLED:
 
 # Create FastAPI app
 app = FastAPI(
-    title=settings.API_TITLE,
-    version=settings.API_VERSION,
-    description=settings.API_DESCRIPTION,
-    debug=settings.DEBUG
+    title="AgentFirst2 MVP API",
+    version="1.0.0",
+    description="""
+**AgentFirst2** é uma plataforma de IA omnichannel para restaurantes que permite gerenciar operações de negócio através de linguagem natural.
+
+## Principais Funcionalidades
+- 🍔 **Gestão de Pedidos**: Integração completa com iFood (105+ critérios de homologação)
+- 🧠 **Linguagem Natural**: Processamento via Claude 3.5 Sonnet
+- 📱 **Omnichannel**: Telegram, WhatsApp, Web, App (contexto unificado por email)
+- 👤 **H.I.T.L.**: Supervisão humana para decisões críticas
+- 💰 **Freemium**: Free (100 msg/mês), Pro (10k msg/mês), Enterprise (ilimitado)
+- 🔒 **Enterprise-Grade**: Encryption, PITR, GSI, DLQ, X-Ray, CloudWatch
+
+## Documentação
+- **OpenAPI Spec**: `/docs/openapi.yaml`
+- **Swagger UI**: `/docs`
+- **ReDoc**: `/redoc`
+- **Exemplos**: `/docs/examples`
+""",
+    debug=settings.DEBUG,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    contact={
+        "name": "AgentFirst2 Support",
+        "email": "support@agentfirst.com",
+        "url": "https://agentfirst.com"
+    },
+    license_info={
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT"
+    }
 )
 
 # Add CORS middleware
@@ -140,6 +168,100 @@ async def status():
     }
 
 
+# Documentation examples endpoint
+@app.get("/docs/examples")
+@xray_recorder.capture("docs_examples")
+async def docs_examples():
+    """API usage examples and integration patterns"""
+    return {
+        "title": "AgentFirst2 API Examples",
+        "description": "Exemplos práticos de integração com a API",
+        "examples": {
+            "health_check": {
+                "description": "Verificar saúde da aplicação",
+                "method": "GET",
+                "url": "/health",
+                "response": {
+                    "status": "healthy",
+                    "environment": "production",
+                    "version": "1.0.0"
+                }
+            },
+            "telegram_webhook": {
+                "description": "Webhook do Telegram para processar mensagens",
+                "method": "POST",
+                "url": "/webhook/telegram",
+                "request_body": {
+                    "update_id": 123456789,
+                    "message": {
+                        "message_id": 1,
+                        "from": {"id": 987654321, "first_name": "João"},
+                        "chat": {"id": 987654321, "type": "private"},
+                        "date": 1640995200,
+                        "text": "Quantos pedidos tenho no iFood?"
+                    }
+                },
+                "response": {"ok": True}
+            },
+            "ifood_webhook": {
+                "description": "Webhook do iFood para receber eventos",
+                "method": "POST",
+                "url": "/webhook/ifood",
+                "headers": {
+                    "X-Signature": "sha256=<hmac_signature>"
+                },
+                "request_body": {
+                    "eventId": "evt_123456789",
+                    "eventType": "order.placed",
+                    "timestamp": "2024-01-15T10:30:00Z",
+                    "merchantId": "merchant_123",
+                    "data": {
+                        "orderId": "order_456",
+                        "totalAmount": 45.50,
+                        "items": [
+                            {"name": "Hambúrguer", "quantity": 1, "price": 25.00}
+                        ]
+                    }
+                },
+                "response": {"ok": True}
+            },
+            "supervisor_commands": {
+                "description": "Comandos H.I.T.L. para supervisores",
+                "examples": [
+                    {
+                        "command": "/approve esc_abc123",
+                        "description": "Aprovar escalação"
+                    },
+                    {
+                        "command": "/reject esc_abc123 Risco muito alto",
+                        "description": "Rejeitar escalação com motivo"
+                    }
+                ]
+            }
+        },
+        "integration_patterns": {
+            "health_monitoring": {
+                "description": "Monitoramento periódico de saúde",
+                "code": "requests.get('/health')"
+            },
+            "webhook_retry": {
+                "description": "Webhook com retry automático",
+                "code": "@retry(stop=stop_after_attempt(3))"
+            },
+            "hmac_validation": {
+                "description": "Validação de assinatura HMAC",
+                "code": "hmac.compare_digest(expected, received)"
+            }
+        },
+        "resources": {
+            "openapi_spec": "/docs/openapi.yaml",
+            "swagger_ui": "/docs",
+            "redoc": "/redoc",
+            "python_examples": "app/docs/api_examples.py"
+        }
+    }
+
+
 # Telegram webhook endpoint
 @app.post("/webhook/telegram")
 @xray_recorder.capture("telegram_webhook")
@@ -188,30 +310,35 @@ async def telegram_webhook(request: Request):
         await telegram.send_typing_indicator(chat_id)
 
         try:
-            # 1. AUTENTICAÇÃO COM COMPONENTES EXISTENTES
+            # Initialize omnichannel interface (centralized orchestrator)
+            from app.omnichannel.interface import OmnichannelInterface
             from app.omnichannel.database.repositories import UserRepository
             from app.omnichannel.database.models import User, UserTier
+            from app.omnichannel.models import ChannelType
+            from app.core.brain import Brain
+            from app.core.auditor import Auditor
+            from app.core.supervisor import Supervisor
+            from app.core.event_bus import EventBus
+            from app.domains.retail.retail_agent import RetailAgent
+            from app.domains.retail.ifood_connector_extended import iFoodConnectorExtended
+            from app.config.secrets_manager import SecretsManager
             
             user_repo = UserRepository()
             
-            # Verificar se usuário existe por Telegram ID
-            # Primeiro, vamos buscar na tabela se já existe um usuário com este telegram_id
-            # Como não temos método direto, vamos implementar a lógica de cadastro
-            
-            # Verificar se a mensagem é um email para cadastro
+            # Check if message is email for registration
             if "@" in text and "." in text and len(text.split()) == 1:
-                # Usuário está enviando email para cadastro
+                # User is sending email for registration
                 email = text.strip().lower()
                 
-                # Validar email
+                # Validate email
                 import re
                 email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
                 if re.match(email_pattern, email):
-                    # Verificar se email já existe
+                    # Check if email already exists
                     existing_user = await user_repo.get_by_email(email)
                     
                     if existing_user:
-                        # Usuário existe, vincular Telegram ID
+                        # User exists, link Telegram ID
                         if not existing_user.telegram_id:
                             await user_repo.update(email, {"telegram_id": user_id})
                             response_text = (
@@ -227,7 +354,7 @@ async def telegram_webhook(request: Request):
                                 "🍔 Você já pode usar o AgentFirst!"
                             )
                     else:
-                        # Criar novo usuário
+                        # Create new user
                         new_user = User(
                             email=email,
                             telegram_id=user_id,
@@ -252,11 +379,11 @@ async def telegram_webhook(request: Request):
                         "exemplo@dominio.com"
                     )
             else:
-                # Verificar se usuário já está cadastrado
+                # Check if user is already registered
                 existing_user = await user_repo.get_by_telegram_id(user_id)
                 
                 if not existing_user:
-                    # Usuário não cadastrado
+                    # User not registered
                     if text.lower() in ["oi", "olá", "hello", "hi", "começar", "start"]:
                         response_text = (
                             "👋 Olá! Bem-vindo ao AgentFirst!\n\n"
@@ -270,49 +397,22 @@ async def telegram_webhook(request: Request):
                             "📧 Por favor, envie seu email:"
                         )
                 else:
-                    # Usuário já cadastrado - processar comando
-                    from app.core.brain import Brain, Context
-                    from app.domains.retail.retail_agent import RetailAgent
-                    from app.domains.retail.ifood_connector_extended import iFoodConnectorExtended
-                    from app.omnichannel.models import ChannelType
-                    from app.config.secrets_manager import SecretsManager
-                    
-                    # Inicializar Brain e Retail Agent com Auditor e Supervisor
-                    auditor = Auditor()
-                    supervisor = Supervisor(auditor=auditor, telegram_service=telegram)
-                    brain = Brain(auditor=auditor, supervisor=supervisor)
-                    retail_agent = RetailAgent(auditor=auditor)
-                    
-                    # Registrar iFood connector real
-                    secrets_manager = SecretsManager()
-                    ifood_connector = iFoodConnectorExtended(secrets_manager)
-                    retail_agent.register_connector('ifood', ifood_connector)
-                    
-                    # Registrar Retail Agent no Brain
-                    brain.register_agent('retail', retail_agent)
-                    
-                    # Criar contexto
-                    context = Context(
-                        email=existing_user.email,
-                        channel=ChannelType.TELEGRAM,
-                        session_id=f"telegram_{user_id}",
-                        user_profile={
-                            'tier': existing_user.tier.value,
-                            'telegram_id': user_id
-                        }
-                    )
-                    
-                    # Configurar supervisor padrão (usar o próprio chat do usuário como supervisor para demo)
-                    brain.configure_supervisor(
-                        supervisor_id="default",
-                        name="Supervisor Padrão",
-                        telegram_chat_id=str(chat_id),
-                        specialties=["retail", "general"],
-                        priority_threshold=1
-                    )
-                    
-                    # Verificar se é comando de supervisão
+                    # User registered - check if it's a supervisor command first
                     if text.startswith('/approve ') or text.startswith('/reject '):
+                        # Handle supervisor commands directly (bypass omnichannel for H.I.T.L.)
+                        auditor = Auditor()
+                        supervisor = Supervisor(auditor=auditor, telegram_service=telegram)
+                        brain = Brain(auditor=auditor, supervisor=supervisor)
+                        
+                        # Configure supervisor
+                        brain.configure_supervisor(
+                            supervisor_id="default",
+                            name="Supervisor Padrão",
+                            telegram_chat_id=str(chat_id),
+                            specialties=["retail", "general"],
+                            priority_threshold=1
+                        )
+                        
                         parts = text.split(' ', 2)
                         command = parts[0][1:]  # Remove '/'
                         escalation_id = parts[1] if len(parts) > 1 else None
@@ -347,8 +447,61 @@ async def telegram_webhook(request: Request):
                                 "• <code>/reject [escalation_id] [motivo]</code>"
                             )
                     else:
-                        # Processar mensagem normal via Brain (com supervisão integrada)
-                        response_text = await brain.process(text, context)
+                        # Process normal message via OmnichannelInterface
+                        # Initialize all services
+                        auditor = Auditor()
+                        supervisor = Supervisor(auditor=auditor, telegram_service=telegram)
+                        event_bus = EventBus()
+                        brain = Brain(auditor=auditor, supervisor=supervisor)
+                        
+                        # Initialize and register retail agent
+                        retail_agent = RetailAgent(auditor=auditor)
+                        secrets_manager = SecretsManager()
+                        ifood_connector = iFoodConnectorExtended(secrets_manager)
+                        retail_agent.register_connector('ifood', ifood_connector)
+                        brain.register_agent('retail', retail_agent)
+                        
+                        # Configure supervisor
+                        brain.configure_supervisor(
+                            supervisor_id="default",
+                            name="Supervisor Padrão",
+                            telegram_chat_id=str(chat_id),
+                            specialties=["retail", "general"],
+                            priority_threshold=1
+                        )
+                        
+                        # Initialize omnichannel interface
+                        omnichannel = OmnichannelInterface(
+                            brain=brain,
+                            auditor=auditor,
+                            supervisor=supervisor,
+                            event_bus=event_bus,
+                            telegram_service=telegram
+                        )
+                        
+                        # Register user channel mapping
+                        await omnichannel.register_user_channel(
+                            email=existing_user.email,
+                            channel=ChannelType.TELEGRAM,
+                            channel_user_id=str(user_id),
+                            metadata={"chat_id": str(chat_id)}
+                        )
+                        
+                        # Process message via omnichannel interface
+                        result = await omnichannel.process_message(
+                            channel=ChannelType.TELEGRAM,
+                            channel_user_id=str(user_id),
+                            message_text=text,
+                            message_id=str(message.get("message_id", "unknown")),
+                            metadata={"chat_id": str(chat_id)}
+                        )
+                        
+                        if result["success"]:
+                            response_text = result["response"]
+                            logger.info(f"Omnichannel processed message successfully in {result.get('processing_time_seconds', 0):.2f}s")
+                        else:
+                            response_text = result["response"]
+                            logger.warning(f"Omnichannel processing failed: {result.get('reason', 'unknown')}")
         
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}")

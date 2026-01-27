@@ -1,0 +1,505 @@
+openapi: 3.0.3
+info:
+  title: AgentFirst2 MVP API
+  description: |
+    **AgentFirst2** é uma plataforma de IA omnichannel para restaurantes que permite gerenciar operações de negócio através de linguagem natural.
+    
+    ## Principais Funcionalidades
+    - 🍔 **Gestão de Pedidos**: Integração completa com iFood (105+ critérios de homologação)
+    - 🧠 **Linguagem Natural**: Processamento via Claude 3.5 Sonnet
+    - 📱 **Omnichannel**: Telegram, WhatsApp, Web, App (contexto unificado por email)
+    - 👤 **H.I.T.L.**: Supervisão humana para decisões críticas
+    - 💰 **Freemium**: Free (100 msg/mês), Pro (10k msg/mês), Enterprise (ilimitado)
+    - 🔒 **Enterprise-Grade**: Encryption, PITR, GSI, DLQ, X-Ray, CloudWatch
+    
+    ## Autenticação
+    - **Email-based**: Identificação universal por email (não por phone/channel ID)
+    - **Cross-channel**: Mesmo contexto em todos os canais
+    - **Session TTL**: 24 horas
+    
+    ## Modelo de Cobrança
+    - **Free Tier**: 100 mensagens/mês
+    - **Pro Tier**: 10.000 mensagens/mês (R$ 99/mês)
+    - **Enterprise**: Mensagens ilimitadas (custom pricing)
+    
+    ## Webhooks
+    - **Telegram**: Recebe updates do Telegram Bot API
+    - **iFood**: Recebe eventos do iFood (pedidos, status, etc.)
+    
+    ## Monitoramento
+    - **Health Check**: `/health` - Status da aplicação
+    - **Status**: `/status` - Informações detalhadas
+    - **CloudWatch**: Logs estruturados (JSON)
+    - **X-Ray**: Distributed tracing
+    
+  version: "1.0.0"
+  contact:
+    name: AgentFirst2 Support
+    email: support@agentfirst.com
+    url: https://agentfirst.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://ain6spik95.execute-api.us-east-1.amazonaws.com/prod
+    description: Production server
+  - url: http://localhost:8000
+    description: Local development server
+
+paths:
+  /health:
+    get:
+      summary: Health Check
+      description: Verifica se a aplicação está funcionando corretamente
+      operationId: healthCheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Aplicação saudável
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                environment: "production"
+                version: "1.0.0"
+        '500':
+          description: Erro interno do servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /status:
+    get:
+      summary: Status Detalhado
+      description: Retorna informações detalhadas sobre o status da aplicação
+      operationId: getStatus
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Status da aplicação
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              example:
+                status: "running"
+                environment: "production"
+                version: "1.0.0"
+                debug: false
+                uptime: "2 days, 14 hours"
+                components:
+                  database: "healthy"
+                  event_bus: "healthy"
+                  bedrock: "healthy"
+
+  /webhook/telegram:
+    post:
+      summary: Telegram Webhook
+      description: |
+        Recebe updates do Telegram Bot API e processa mensagens dos usuários.
+        
+        ## Fluxo de Processamento
+        1. **Validação**: Verifica estrutura da mensagem
+        2. **Autenticação**: Identifica usuário por email
+        3. **Classificação**: Claude 3.5 Sonnet classifica intenção
+        4. **Supervisão**: Avalia se requer intervenção humana (H.I.T.L.)
+        5. **Execução**: Executa via agente apropriado
+        6. **Resposta**: Formata em linguagem natural
+        
+        ## Comandos Especiais
+        - `/approve [escalation_id]` - Aprova escalação (supervisores)
+        - `/reject [escalation_id] [motivo]` - Rejeita escalação (supervisores)
+        
+      operationId: telegramWebhook
+      tags:
+        - Webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelegramUpdate'
+            example:
+              update_id: 123456789
+              message:
+                message_id: 1
+                from:
+                  id: 987654321
+                  is_bot: false
+                  first_name: "João"
+                  username: "joao_restaurante"
+                chat:
+                  id: 987654321
+                  first_name: "João"
+                  type: "private"
+                date: 1640995200
+                text: "Quantos pedidos tenho no iFood?"
+      responses:
+        '200':
+          description: Mensagem processada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+              example:
+                ok: true
+        '400':
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /webhook/ifood:
+    post:
+      summary: iFood Webhook
+      description: |
+        Recebe eventos do iFood API (pedidos, status, etc.) e processa automaticamente.
+        
+        ## Eventos Suportados
+        - **order.placed** - Novo pedido recebido
+        - **order.confirmed** - Pedido confirmado
+        - **order.cancelled** - Pedido cancelado
+        - **order.ready** - Pedido pronto
+        - **order.dispatched** - Pedido despachado
+        - **order.delivered** - Pedido entregue
+        
+        ## Segurança
+        - **HMAC-SHA256**: Validação de assinatura obrigatória
+        - **Deduplicação**: Eventos duplicados são descartados
+        - **Rate Limiting**: Proteção contra spam
+        
+      operationId: ifoodWebhook
+      tags:
+        - Webhooks
+      security:
+        - HmacSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/iFoodEvent'
+            example:
+              eventId: "evt_123456789"
+              eventType: "order.placed"
+              timestamp: "2024-01-15T10:30:00Z"
+              merchantId: "merchant_123"
+              data:
+                orderId: "order_456"
+                customerId: "customer_789"
+                totalAmount: 45.50
+                items:
+                  - name: "Hambúrguer Clássico"
+                    quantity: 1
+                    price: 25.00
+                  - name: "Batata Frita"
+                    quantity: 1
+                    price: 12.00
+                  - name: "Refrigerante"
+                    quantity: 1
+                    price: 8.50
+      responses:
+        '200':
+          description: Evento processado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '401':
+          description: Assinatura HMAC inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - environment
+        - version
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+          description: Status da aplicação
+        environment:
+          type: string
+          enum: [development, staging, production]
+          description: Ambiente de execução
+        version:
+          type: string
+          description: Versão da aplicação
+          example: "1.0.0"
+
+    StatusResponse:
+      type: object
+      required:
+        - status
+        - environment
+        - version
+        - debug
+      properties:
+        status:
+          type: string
+          enum: [running, stopped, error]
+          description: Status de execução
+        environment:
+          type: string
+          description: Ambiente de execução
+        version:
+          type: string
+          description: Versão da aplicação
+        debug:
+          type: boolean
+          description: Modo debug ativo
+        uptime:
+          type: string
+          description: Tempo de atividade
+          example: "2 days, 14 hours"
+        components:
+          type: object
+          description: Status dos componentes
+          properties:
+            database:
+              type: string
+              enum: [healthy, unhealthy]
+            event_bus:
+              type: string
+              enum: [healthy, unhealthy]
+            bedrock:
+              type: string
+              enum: [healthy, unhealthy]
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Descrição do erro
+        message:
+          type: string
+          description: Mensagem detalhada do erro
+        request_id:
+          type: string
+          description: ID único da requisição para rastreamento
+
+    WebhookResponse:
+      type: object
+      required:
+        - ok
+      properties:
+        ok:
+          type: boolean
+          description: Indica se o webhook foi processado com sucesso
+
+    TelegramUpdate:
+      type: object
+      required:
+        - update_id
+      properties:
+        update_id:
+          type: integer
+          description: ID único do update
+        message:
+          $ref: '#/components/schemas/TelegramMessage'
+        edited_message:
+          $ref: '#/components/schemas/TelegramMessage'
+        callback_query:
+          $ref: '#/components/schemas/TelegramCallbackQuery'
+
+    TelegramMessage:
+      type: object
+      required:
+        - message_id
+        - date
+        - chat
+      properties:
+        message_id:
+          type: integer
+          description: ID único da mensagem
+        from:
+          $ref: '#/components/schemas/TelegramUser'
+        date:
+          type: integer
+          description: Timestamp da mensagem (Unix time)
+        chat:
+          $ref: '#/components/schemas/TelegramChat'
+        text:
+          type: string
+          description: Texto da mensagem
+        reply_to_message:
+          $ref: '#/components/schemas/TelegramMessage'
+
+    TelegramUser:
+      type: object
+      required:
+        - id
+        - is_bot
+        - first_name
+      properties:
+        id:
+          type: integer
+          description: ID único do usuário
+        is_bot:
+          type: boolean
+          description: Indica se é um bot
+        first_name:
+          type: string
+          description: Primeiro nome
+        last_name:
+          type: string
+          description: Último nome
+        username:
+          type: string
+          description: Username do Telegram
+
+    TelegramChat:
+      type: object
+      required:
+        - id
+        - type
+      properties:
+        id:
+          type: integer
+          description: ID único do chat
+        type:
+          type: string
+          enum: [private, group, supergroup, channel]
+          description: Tipo do chat
+        title:
+          type: string
+          description: Título do chat (para grupos)
+        username:
+          type: string
+          description: Username do chat
+        first_name:
+          type: string
+          description: Primeiro nome (para chats privados)
+        last_name:
+          type: string
+          description: Último nome (para chats privados)
+
+    TelegramCallbackQuery:
+      type: object
+      required:
+        - id
+        - from
+      properties:
+        id:
+          type: string
+          description: ID único da callback query
+        from:
+          $ref: '#/components/schemas/TelegramUser'
+        message:
+          $ref: '#/components/schemas/TelegramMessage'
+        data:
+          type: string
+          description: Dados da callback query
+
+    iFoodEvent:
+      type: object
+      required:
+        - eventId
+        - eventType
+        - timestamp
+        - merchantId
+        - data
+      properties:
+        eventId:
+          type: string
+          description: ID único do evento
+          example: "evt_123456789"
+        eventType:
+          type: string
+          enum: 
+            - order.placed
+            - order.confirmed
+            - order.cancelled
+            - order.ready
+            - order.dispatched
+            - order.delivered
+          description: Tipo do evento
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp do evento (ISO 8601)
+        merchantId:
+          type: string
+          description: ID do merchant no iFood
+        data:
+          type: object
+          description: Dados específicos do evento
+          properties:
+            orderId:
+              type: string
+              description: ID do pedido
+            customerId:
+              type: string
+              description: ID do cliente
+            totalAmount:
+              type: number
+              format: float
+              description: Valor total do pedido
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrderItem'
+
+    OrderItem:
+      type: object
+      required:
+        - name
+        - quantity
+        - price
+      properties:
+        name:
+          type: string
+          description: Nome do item
+        quantity:
+          type: integer
+          description: Quantidade
+        price:
+          type: number
+          format: float
+          description: Preço unitário
+        observations:
+          type: string
+          description: Observações do item
+
+  securitySchemes:
+    HmacSignature:
+      type: apiKey
+      in: header
+      name: X-Signature
+      description: |
+        Assinatura HMAC-SHA256 para validação de webhooks do iFood.
+        
+        **Formato**: `sha256=<hash>`
+        
+        **Cálculo**:
+        ```
+        hash = HMAC-SHA256(secret_key, request_body)
+        signature = "sha256=" + hex(hash)
+        ```
+
+tags:
+  - name: Health
+    description: Endpoints de saúde e status da aplicação
+  - name: Webhooks
+    description: Endpoints para receber eventos externos (Telegram, iFood)
+
+externalDocs:
+  description: Documentação completa do AgentFirst2
+  url: https://docs.agentfirst.com
