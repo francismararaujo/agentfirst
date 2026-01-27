@@ -191,7 +191,25 @@ async def telegram_webhook(request: Request):
         # 4. Send response back to Telegram
 
         # For now, send a simple acknowledgment
-        response_text = f"✅ Recebi sua mensagem: <b>{text}</b>\n\n⚙️ Sistema em desenvolvimento..."
+        if text.lower() in ["oi", "olá", "hello", "hi"]:
+            response_text = (
+                "👋 Olá! Eu sou o AgentFirst!\n\n"
+                "🍔 Sou seu assistente para gerenciar pedidos do iFood.\n\n"
+                "⚙️ Sistema em desenvolvimento...\n"
+                "Em breve você poderá:\n"
+                "• Verificar pedidos pendentes\n"
+                "• Confirmar pedidos automaticamente\n"
+                "• Ver faturamento em tempo real"
+            )
+        elif "@" in text and "." in text:
+            # Usuário enviou um email
+            response_text = (
+                f"📧 Recebi seu email: {text}\n\n"
+                "✅ Em breve implementaremos o cadastro completo!\n\n"
+                "🔧 Por enquanto, continue testando o bot..."
+            )
+        else:
+            response_text = f"✅ Recebi sua mensagem: <b>{text}</b>\n\n⚙️ Sistema em desenvolvimento..."
         
         logger.info(f"Sending response to chat {chat_id}")
 
