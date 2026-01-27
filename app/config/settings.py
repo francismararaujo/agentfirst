@@ -2,11 +2,14 @@
 
 import os
 from typing import Optional
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
+
+    model_config = ConfigDict(env_file=".env", case_sensitive=True)
 
     # Environment
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
@@ -78,10 +81,6 @@ class Settings(BaseSettings):
 
     # X-Ray Configuration
     XRAY_ENABLED: bool = ENVIRONMENT != "test"
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 
 # Global settings instance

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, asdict
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -35,9 +35,9 @@ class User:
 
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.utcnow().isoformat()
+            self.created_at = datetime.now(timezone.utc).isoformat()
         if self.updated_at is None:
-            self.updated_at = datetime.utcnow().isoformat()
+            self.updated_at = datetime.now(timezone.utc).isoformat()
 
     def to_dynamodb(self) -> Dict[str, Any]:
         """Convert to DynamoDB format"""

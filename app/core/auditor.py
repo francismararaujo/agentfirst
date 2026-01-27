@@ -23,7 +23,7 @@ import json
 import hashlib
 import hmac
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, asdict
 from enum import Enum
 import boto3
@@ -271,7 +271,7 @@ class Auditor:
             audit_id = self._generate_audit_id()
             
             # Timestamp preciso com timezone
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             timestamp = now.isoformat() + 'Z'
             timezone = 'UTC'
             
@@ -451,7 +451,7 @@ class Auditor:
             item['level'] = audit_entry.level.value
             
             # Adicionar TTL (1 ano)
-            ttl_timestamp = int((datetime.utcnow() + timedelta(days=self.retention_days)).timestamp())
+            ttl_timestamp = int((datetime.now(timezone.utc) + timedelta(days=self.retention_days)).timestamp())
             item['ttl'] = ttl_timestamp
             
             # Chaves para DynamoDB
@@ -520,7 +520,7 @@ class Auditor:
             for item in response['Items']:
                 # Converter strings de volta para enums
                 item['category'] = AuditCategory(item['category'])
-                item['level'] = AuditLevel(item['level'])
+                item['level'] = AuditLevel(item['level'].upper())
                 
                 # Remover chaves DynamoDB
                 item.pop('PK', None)
@@ -617,7 +617,7 @@ class Auditor:
             # Gerar relatório
             report = ComplianceReport(
                 report_id=self._generate_audit_id(),
-                generated_at=datetime.utcnow(),
+                generated_at=datetime.now(timezone.utc),
                 period_start=start_date,
                 period_end=end_date,
                 user_email=user_email,

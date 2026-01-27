@@ -32,7 +32,7 @@ from app.billing.limit_enforcer import LimitEnforcer
 from app.billing.billing_manager import BillingManager
 from app.core.auditor import Auditor, AuditCategory, AuditLevel
 from app.core.supervisor import Supervisor
-from app.core.event_bus import EventBus
+from app.core.event_bus import EventBus, EventMessage
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,7 @@ class OmnichannelInterface:
                 raise ValueError(f"User not found for email: {universal_message.email}")
             
             # 3. Check usage limits (Freemium billing)
-            can_process = await self.usage_tracker.can_process_message(
+            can_process = await self.limit_enforcer.check_limit(
                 email=user.email,
                 tier=user.tier.value
             )
@@ -178,7 +178,7 @@ class OmnichannelInterface:
                 await self.auditor.log_transaction(
                     email=user.email,
                     action="limit_hit",
-                    category=AuditCategory.BILLING,
+                    category=AuditCategory.SYSTEM_OPERATION,
                     level=AuditLevel.WARNING,
                     input_data={
                         "channel": channel.value,
@@ -214,11 +214,12 @@ class OmnichannelInterface:
                     'telegram_id': getattr(user, 'telegram_id', None),
                     'created_at': user.created_at.isoformat() if user.created_at else None
                 },
-                conversation_history=context_data.get('conversation_history', []),
-                last_intent=context_data.get('last_intent'),
-                last_connector=context_data.get('last_connector'),
-                last_order_id=context_data.get('last_order_id'),
-                nlp_result=nlp_result
+                history=context_data.get('conversation_history', []),
+                memory={
+                    'last_intent': context_data.get('last_intent'),
+                    'last_connector': context_data.get('last_connector'),
+                    'last_order_id': context_data.get('last_order_id'),
+                }
             )
             
             # 7. Process via Brain (with H.I.T.L. supervision)
@@ -252,7 +253,7 @@ class OmnichannelInterface:
             await self.auditor.log_transaction(
                 email=user.email,
                 action="message_processed",
-                category=AuditCategory.OMNICHANNEL,
+                category=AuditCategory.SYSTEM_OPERATION,
                 level=AuditLevel.INFO,
                 input_data={
                     "channel": channel.value,
@@ -268,16 +269,19 @@ class OmnichannelInterface:
             )
             
             # 11. Publish event for coordination
-            await self.event_bus.publish(
-                topic="omnichannel.message_processed",
-                data={
-                    "email": user.email,
-                    "channel": channel.value,
-                    "intent": nlp_result.classification.intent.value,
-                    "connector": nlp_result.classification.connector,
-                    "timestamp": datetime.now().isoformat(),
-                    "processing_time_seconds": processing_time
-                }
+            await self.event_bus.publish_event(
+                event=EventMessage(
+                    event_type="message_processed",
+                    source="omnichannel",
+                    user_email=user.email,
+                    data={
+                        "email": user.email,
+                        "channel": channel.value,
+                        "intent": nlp_result.classification.intent.value,
+                        "connector": nlp_result.classification.connector,
+                        "processing_time_seconds": processing_time
+                    }
+                )
             )
             
             logger.info(f"Successfully processed message for {user.email} in {processing_time:.2f}s")
@@ -304,7 +308,7 @@ class OmnichannelInterface:
                 await self.auditor.log_transaction(
                     email=email,
                     action="message_processing_error",
-                    category=AuditCategory.OMNICHANNEL,
+                    category=AuditCategory.ERROR_EVENT,
                     level=AuditLevel.ERROR,
                     input_data={
                         "channel": channel.value,
@@ -406,7 +410,7 @@ class OmnichannelInterface:
             await self.auditor.log_transaction(
                 email=email,
                 action="new_order_notification",
-                category=AuditCategory.OMNICHANNEL,
+                category=AuditCategory.BUSINESS_OPERATION,
                 level=AuditLevel.INFO,
                 input_data={
                     "order_id": order_data.get("order_id"),
@@ -417,16 +421,19 @@ class OmnichannelInterface:
             )
             
             # 6. Publish event
-            await self.event_bus.publish(
-                topic="omnichannel.order_notification_sent",
-                data={
-                    "email": email,
-                    "order_id": order_data.get("order_id"),
-                    "connector": connector,
-                    "channels": list(user_channels.keys()),
-                    "results": notification_results,
-                    "timestamp": datetime.now().isoformat()
-                }
+            await self.event_bus.publish_event(
+                event=EventMessage(
+                    event_type="order_notification_sent",
+                    source="omnichannel",
+                    user_email=email,
+                    data={
+                        "email": email,
+                        "order_id": order_data.get("order_id"),
+                        "connector": connector,
+                        "channels": list(user_channels.keys()),
+                        "results": notification_results
+                    }
+                )
             )
             
             return {
@@ -471,7 +478,7 @@ class OmnichannelInterface:
             await self.auditor.log_transaction(
                 email=email,
                 action="channel_registered",
-                category=AuditCategory.OMNICHANNEL,
+                category=AuditCategory.SYSTEM_OPERATION,
                 level=AuditLevel.INFO,
                 input_data={
                     "channel": channel.value,
