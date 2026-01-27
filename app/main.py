@@ -6,11 +6,13 @@ This module provides the FastAPI application with:
 - X-Ray tracing for distributed tracing
 - Error handling and validation
 - Webhook endpoints for Telegram and iFood
+- 100% AI-powered message processing
 """
 
 import logging
 import json
 import time
+import asyncio
 from typing import Callable
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +23,17 @@ from aws_xray_sdk.core import patch_all
 from app.config.settings import settings
 from app.core.request_validator import RequestValidator
 from app.omnichannel.telegram_service import TelegramService
+from app.omnichannel.database.repositories import UserRepository
+from app.omnichannel.database.models import User, UserTier
+from app.omnichannel.models import ChannelType
+from app.core.brain import Brain
+from app.core.auditor import Auditor
+from app.core.supervisor import Supervisor
+ EventBusConfig
+from app.domains.retail.retail_agent import RetailAgent
+from app.domains.retail.ifood_connector_extended import iFoodConnectorExtended
+from app.config.secrets_manager import SecretsManager
+from app.omnichannel.interface import OmnichannelInterface
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -39,7 +52,7 @@ app = FastAPI(
 
 ## Principais Funcionalidades
 - 🍔 **Gestão de Pedidos**: Integração completa com iFood (105+ critérios de homologação)
-- 🧠 **Linguagem Natural**: Processamento via Claude 3.5 Sonnet
+- 🧠 **Linguagem Natural**: Processamento 100% via Claude 3.5 Sonnet
 - 📱 **Omnichannel**: Telegram, WhatsApp, Web, App (contexto unificado por email)
 - 👤 **H.I.T.L.**: Supervisão humana para decisões críticas
 - 💰 **Freemium**: Free (100 msg/mês), Pro (10k msg/mês), Enterprise (ilimitado)
@@ -78,7 +91,7 @@ app.add_middleware(
 
 # Custom middleware for request/response logging
 @app.middleware("http")
-async def logging_middleware(request: Request, call_next: Callable):
+e):
     """
     Middleware for structured request/response logging
 
@@ -188,7 +201,7 @@ async def docs_examples():
                 "description": "Webhook do Telegram para processar mensagens",
                 "method": "POST",
                 "url": "/webhook/telegram",
-                "request_body": {
+                "reque: {
                     "update_id": 123456789,
                     "message": {
                         "message_id": 1,
@@ -202,7 +215,7 @@ async def docs_examples():
             }
         },
         "resources": {
-            "openapi_spec": "/docs/openapi.yaml",
+penapi_spec": "/docs/openapi.yaml",
             "swagger_ui": "/docs",
             "redoc": "/redoc"
         }
@@ -214,9 +227,9 @@ async def docs_examples():
 @xray_recorder.capture("telegram_webhook")
 async def telegram_webhook(request: Request):
     """
-    Telegram webhook endpoint
+    Telegram webhook endpoint - 100% AI-powered message processing
 
-    Receives updates from Telegram Bot API and processes them.
+    Receives updates from Telegram Bot API and processes them via Brain.
 
     Args:
         request: HTTP request
@@ -240,7 +253,7 @@ async def telegram_webhook(request: Request):
             return {"ok": True}
 
         message = data["message"]
-        chat_id = message.get("chat", {}).get("id")
+        chat_id = message.get("id")
         user_id = message.get("from", {}).get("id")
         text = message.get("text", "")
 
@@ -250,102 +263,99 @@ async def telegram_webhook(request: Request):
 
         logger.info(f"Processing message from user {user_id}: {text}")
 
-        # Initialize services
+        # Initialize Telegram service
         telegram = TelegramService()
         
         # Send typing indicator
         await telegram.send_typing_indicator(chat_id)
 
         try:
-            # Check if message is email for registration
-            if "@" in text and "." in text and len(text.split()) == 1:
-                # User is sending email for registration
-                email = text.strip().lower()
-                
-                # Validate email
-                import re
-                email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-                
-                if re.match(email_pattern, email):
-                    # Check if email already exists
-                    from app.omnichannel.database.repositories import UserRepository
-                    from app.omnichannel.database.models import User, UserTier
-                    
-                    user_repo = UserRepository()
-                    existing_user = await user_repo.get_by_email(email)
-                    
-                    if existing_user:
-                        # User exists, link Telegram ID
-                        if not existing_user.telegram_id:
-                            await user_repo.update(email, {"telegram_id": user_id})
-                            response_text = (
-                                f"✅ Perfeito! Vinculei seu Telegram ao email: {email}\n\n"
-                                "🍔 Agora você pode usar o AgentFirst!\n\n"
-                                "Experimente:\n"
-                                "• 'Quantos pedidos tenho?'\n"
-                                "• 'Qual meu faturamento hoje?'"
-                            )
-                        else:
-                            response_text = (
-                                f"✅ Email {email} já está cadastrado!\n\n"
-                                "🍔 Você já pode usar o AgentFirst!"
-                            )
-                    else:
-                        # Create new user
-                        new_user = User(
-                            email=email,
-                            telegram_id=user_id,
-                            tier=UserTier.FREE
-                        )
-                        await user_repo.create(new_user)
-                        
-                        response_text = (
-                            f"🎉 Cadastro realizado com sucesso!\n\n"
-                            f"📧 Email: {email}\n"
-                            f"🎯 Tier: Gratuito (100 mensagens/mês)\n\n"
-                            "🍔 Agora você pode gerenciar seus pedidos do iFood!\n\n"
-                            "Experimente:\n"
-                            "• 'Quantos pedidos tenho?'\n"
-                            "• 'Qual meu faturamento hoje?'\n"
-                            "• 'Feche a loja por 30 minutos'"
-                        )
-                else:
-                    response_text = (
-                        "❌ Email inválido!\n\n"
-                        "📧 Por favor, envie um email válido no formato:\n"
-                        "exemplo@dominio.com"
-                    )
-            else:
-                # Check if user is already registered
-                from app.omnichannel.database.repositories import UserRepository
-                
-                user_repo = UserRepository()
-                existing_user = await user_repo.get_by_telegram_id(user_id)
-                
-                if not existing_user:
-                    # User not registered
-                    if text.lower() in ["oi", "olá", "hello", "hi", "começar", "start"]:
-                        response_text = (
-                            "👋 Olá! Bem-vindo ao AgentFirst!\n\n"
-                            "🍔 Sou seu assistente para gerenciar pedidos do iFood.\n\n"
-                            "Para começar, preciso do seu email para identificá-lo em todos os canais.\n\n"
-                            "📧 Por favor, envie seu email:"
-                        )
-                    else:
-                        response_text = (
-                            "🔐 Para usar o AgentFirst, preciso do seu email primeiro.\n\n"
-                            "📧 Por favor, envie seu email:"
-                        )
-                else:
-                    # User registered - simple echo for now (MVP)
-                    response_text = (
-                        f"✅ Mensagem recebida!\n\n"
-                        f"📝 Você disse: {text}\n\n"
-                        f"🚀 Em breve vou processar sua mensagem com IA!"
-                    )
+            # Initiatories and services
+            user_repo = UserRepository()
             
+            # Get or create user
+            user = await user_repo.get_by_telegram_id(user_id)
+            
+            if not user:
+                # New user - ask for email
+                response_text = (
+                    "👋 Olá! Bem-vindo ao AgentFirst!\n\n"
+                    "🍔 Sou seu assistente para gerenciar pedidos do iFood.\n\n"
+                    "Para começar, preciso do seais.\n\n"
+                    "📧 Por favor, envie seu email (ex: seu@email.com):"
+                )
+            else:
+                # User exists - process via Brain
+                try:
+                    # Initialize all services
+                    auditor = Auditor()
+                    supervisor = Supervisor(auditor=auditor, telegram_service=telegram)
+                    
+                    # Initialize EventBus
+                    event_bus_config = EventBusConfig(region=settings.AWS_REGION)
+                    event_bus = EventBus(event_bus_config)
+                    
+                    # Initialize Brain
+                    brain = Brain(auditor=auditor, supervisor=supervisor)
+                    
+                    # Initialize and register retail agent
+                    retail_agent = RetailAgent(auditor=auditor)
+                    secrets_manager = SecretsManager()
+                    ifood_connector = iFoodConnectorExtended(secrets_manager)
+                    retail_agent.register_connector('ifood', ifood_connector)
+                    brain.register_agent('retail', retail_agent)
+                    
+                    # Configure supervisor
+                    brain.configure_supervisor(
+                        supervisor_id="default",
+                        name="Supervisor Padrão",
+                        telegram_chat_id=str(chat_id),
+                        specialties=["retail", "general"],
+                        priority_threshold=1
+                    )
+                    
+                    #nitialize omnichannel interface
+                    omnichannel = OmnichannelInterface(
+                        brain=brain,
+                        auditor=auditor,
+                        supervisor=supervisor,
+                        event_bus=event_bus,
+                        telegram_service=telegram
+                    )
+                    
+                    # Register user channel mapping
+                    await omnichannel.register_user_channel(
+                        email=user.email,
+                        channel=ChannelType.TELEGRAM,
+                        channel_user_id=str(user_id),
+                        metadata={"chat_id": str(chat_id)}
+                    )
+                    
+                    # Process message via omnichannel interface (100% AI)
+                    result = await omnichannel.process_message(
+                        channel=ChannelType.TELEGRAM,
+                        channel_user_id=str(user_id),
+                        message_text=text,
+                     e_id=str(message.get("message_id", "unknown")),
+                        metadata={"chat_id": str(chat_id)}
+                    )
+                    
+                    if result["success"]:
+                        response_text = result["response"]
+                        logger.info(f"Brain processed message successfully in {result.get('processing_time_seconds', 0):.2f}s")
+                    else:
+                        response_text = result["response"]
+                        logger.warning(f"Brain processing failed: {result.get('reason', 'unknown')}")
+                        
+                except Exception as brain_error:
+                    logger.error(f"Error processing via Brain: {str(brain_error)}", exc_info=True)
+                    response_text = (
+                        "❌ Erro ao processar sua mensagem.\n\n"
+                        "🔧 Tente novamente em alguns segundos."
+                    )
+        
         except Exception as e:
-            logger.error(f"Error processing message: {str(e)}")
+            logger.error(f"E", exc_info=True)
             response_text = (
                 "❌ Ops! Algo deu errado.\n\n"
                 "🔧 Tente novamente em alguns segundos."
@@ -369,7 +379,7 @@ async def telegram_webhook(request: Request):
         return {"ok": True}
 
     except Exception as e:
-        logger.error(f"Error processing Telegram webhook: {str(e)}")
+        logger.error(f"Error processing Telegram webhook: {str(e)}", exc_info=True)
         return JSONResponse(
             status_code=400,
             content={"error": "Invalid request"}
@@ -419,7 +429,7 @@ async def ifood_webhook(request: Request):
 
 # Error handler for validation errors
 @app.exception_handler(ValueError)
-async def value_error_handler(request: Request, exc: ValueError):
+uest, exc: ValueError):
     """Handle ValueError exceptions"""
     logger.error(f"Validation error: {str(exc)}")
     return JSONResponse(
