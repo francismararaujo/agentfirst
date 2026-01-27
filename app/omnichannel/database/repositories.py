@@ -432,3 +432,26 @@ class EscalationRepository(DynamoDBRepository):
         except ClientError as e:
             logger.error(f"Error updating escalation: {str(e)}")
             raise
+
+
+class ChannelMappingRepository(DynamoDBRepository):
+    """Repository for Channel Mapping (uses Users table for now)"""
+
+    async def get_by_channel_id(self, channel: str, channel_user_id: str) -> Optional[Dict[str, Any]]:
+        """Get email by channel user ID"""
+        try:
+            # For now, use UserRepository to find by telegram_id
+            # In the future, this could be a separate table
+            user_repo = UserRepository()
+            if channel.lower() == 'telegram':
+                user = await user_repo.get_by_telegram_id(int(channel_user_id))
+                if user:
+                    return {'email': user.email, 'channel': channel, 'channel_user_id': channel_user_id}
+            return None
+        except Exception as e:
+            logger.error(f"Error getting channel mapping: {str(e)}")
+            return None
+
+    async def create_mapping(self, channel: str, channel_user_id: str, email: str) -> Dict[str, Any]:
+        """Create channel mapping (for now, just return the mapping)"""
+        return {'email': email, 'channel': channel, 'channel_user_id': channel_user_id}

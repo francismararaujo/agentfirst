@@ -92,7 +92,9 @@ class OmnichannelInterface:
         self.user_repository = UserRepository()
         
         # Initialize omnichannel services
-        self.channel_mapping = ChannelMappingService()
+        from app.omnichannel.database.repositories import ChannelMappingRepository
+        channel_mapping_repository = ChannelMappingRepository()
+        self.channel_mapping = ChannelMappingService(channel_mapping_repository)
         self.message_processor = UniversalMessageProcessor(
             channel_mapping_service=self.channel_mapping,
             session_manager=self.session_manager,
@@ -104,7 +106,7 @@ class OmnichannelInterface:
         # Initialize billing services
         self.usage_tracker = UsageTracker()
         self.limit_enforcer = LimitEnforcer()
-        self.billing_manager = BillingManager()
+        self.billing_manager = BillingManager(self.usage_tracker, self.limit_enforcer)
         
         logger.info("OmnichannelInterface initialized with all services")
     
