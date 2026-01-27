@@ -18,6 +18,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from app.omnichannel.models import ChannelType
+from app.core.auditor import Auditor, AuditCategory, AuditLevel
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +184,7 @@ class Brain:
     Orquestrador central usando Claude 3.5 Sonnet via Bedrock
     """
     
-    def __init__(self, bedrock_client, memory_service, event_bus, auditor):
+    def __init__(self, bedrock_client=None, memory_service=None, event_bus=None, auditor=None):
         """
         Inicializa Brain
         
@@ -193,11 +194,16 @@ class Brain:
             event_bus: Event bus (SNS/SQS)
             auditor: Serviço de auditoria
         """
-        self.bedrock = bedrock_client
+        if bedrock_client is None:
+            self.bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
+        else:
+            self.bedrock = bedrock_client
+            
         self.memory = memory_service
         self.event_bus = event_bus
-        self.auditor = auditor
+        self.auditor = auditor or Auditor()
         self.agents = {}  # Agentes por domínio
+        self.model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
     
     def register_agent(self, domain: str, agent):
         """
@@ -224,62 +230,163 @@ class Brain:
         Returns:
             Resposta em linguagem natural
         """
+        start_time = datetime.now()
+        
         try:
-            # 1. Classificar intenção com Claude
+            # 1. Registrar início da operação na auditoria
+            await self.auditor.log_transaction(
+                email=context.email,
+                action="brain.process_start",
+                input_data={
+                    'message': message,
+                    'channel': context.channel.value,
+                    'session_id': context.session_id
+                },
+                output_data={},
+                agent="brain",
+                category=AuditCategory.SYSTEM_OPERATION,
+                level=AuditLevel.INFO,
+                status="started",
+                session_id=context.session_id,
+                channel=context.channel.value
+            )
+            
+            # 2. Classificar intenção com Claude
             intent = await self._classify_intent(message, context)
             
-            # 2. Recuperar contexto de Memory
-            memory_context = await self.memory.get_context(context.email)
-            context.memory = memory_context
+            # 3. Registrar classificação na auditoria
+            await self.auditor.log_transaction(
+                email=context.email,
+                action="brain.classify_intent",
+                input_data={
+                    'message': message,
+                    'context_memory': context.memory
+                },
+                output_data={
+                    'domain': intent.domain,
+                    'action': intent.action,
+                    'connector': intent.connector,
+                    'confidence': intent.confidence,
+                    'entities': intent.entities
+                },
+                agent="brain",
+                category=AuditCategory.SYSTEM_OPERATION,
+                level=AuditLevel.INFO,
+                status="success",
+                session_id=context.session_id,
+                channel=context.channel.value
+            )
             
-            # 3. Rotear para agente apropriado
+            # 4. Recuperar contexto de Memory
+            if self.memory:
+                memory_context = await self.memory.get_context(context.email)
+                context.memory = memory_context
+            
+            # 5. Rotear para agente apropriado
             if intent.domain not in self.agents:
-                return f"Desculpe, ainda não tenho suporte para o domínio '{intent.domain}'"
+                error_message = f"Desculpe, ainda não tenho suporte para o domínio '{intent.domain}'"
+                
+                # Registrar erro na auditoria
+                await self.auditor.log_transaction(
+                    email=context.email,
+                    action="brain.route_agent",
+                    input_data={
+                        'domain': intent.domain,
+                        'available_domains': list(self.agents.keys())
+                    },
+                    output_data={'error': error_message},
+                    agent="brain",
+                    category=AuditCategory.SYSTEM_OPERATION,
+                    level=AuditLevel.WARNING,
+                    status="error",
+                    error_message=error_message,
+                    session_id=context.session_id,
+                    channel=context.channel.value
+                )
+                
+                return error_message
             
             agent = self.agents[intent.domain]
             response_data = await agent.execute(intent, context)
             
-            # 4. Formatar resposta em linguagem natural
+            # 6. Formatar resposta em linguagem natural
             response = await self._format_response(response_data, intent, context)
             
-            # 5. Atualizar memória
-            await self.memory.update_context(context.email, {
-                'last_intent': intent.action,
-                'last_domain': intent.domain,
-                'last_connector': intent.connector,
-                'last_response': response,
-                'timestamp': datetime.now().isoformat()
-            })
+            # 7. Atualizar memória
+            if self.memory:
+                await self.memory.update_context(context.email, {
+                    'last_intent': intent.action,
+                    'last_domain': intent.domain,
+                    'last_connector': intent.connector,
+                    'last_response': response,
+                    'timestamp': datetime.now().isoformat()
+                })
             
-            # 6. Registrar na auditoria
+            # 8. Publicar evento
+            if self.event_bus:
+                await self.event_bus.publish(
+                    topic=f"{intent.domain}.{intent.action}",
+                    message={
+                        'email': context.email,
+                        'intent': intent.action,
+                        'connector': intent.connector,
+                        'timestamp': datetime.now().isoformat()
+                    }
+                )
+            
+            # 9. Calcular duração
+            end_time = datetime.now()
+            duration_ms = (end_time - start_time).total_seconds() * 1000
+            
+            # 10. Registrar sucesso na auditoria
             await self.auditor.log_transaction(
                 email=context.email,
-                action=f"{intent.domain}.{intent.action}",
-                input_data={'message': message, 'intent': intent.action},
-                output_data={'response': response}
-            )
-            
-            # 7. Publicar evento
-            await self.event_bus.publish(
-                topic=f"{intent.domain}.{intent.action}",
-                message={
-                    'email': context.email,
+                action="brain.process_complete",
+                input_data={
+                    'message': message,
                     'intent': intent.action,
-                    'connector': intent.connector,
-                    'timestamp': datetime.now().isoformat()
-                }
+                    'domain': intent.domain
+                },
+                output_data={
+                    'response': response,
+                    'success': response_data.get('success', True)
+                },
+                agent="brain",
+                category=AuditCategory.BUSINESS_OPERATION,
+                level=AuditLevel.INFO,
+                status="success",
+                duration_ms=duration_ms,
+                session_id=context.session_id,
+                channel=context.channel.value
             )
             
             return response
             
         except Exception as e:
+            # Calcular duração mesmo em caso de erro
+            end_time = datetime.now()
+            duration_ms = (end_time - start_time).total_seconds() * 1000
+            
+            error_message = f"Desculpe, ocorreu um erro ao processar sua mensagem: {str(e)}"
+            
+            # Registrar erro na auditoria
             await self.auditor.log_transaction(
                 email=context.email,
-                action="error",
+                action="brain.process_error",
                 input_data={'message': message},
-                output_data={'error': str(e)}
+                output_data={'error': str(e)},
+                agent="brain",
+                category=AuditCategory.ERROR_EVENT,
+                level=AuditLevel.ERROR,
+                status="error",
+                error_message=str(e),
+                duration_ms=duration_ms,
+                session_id=context.session_id,
+                channel=context.channel.value
             )
-            return f"Desculpe, ocorreu um erro ao processar sua mensagem: {str(e)}"
+            
+            logger.error(f"Error processing message: {str(e)}")
+            return error_message
     
     async def _classify_intent(
         self,
@@ -296,46 +403,62 @@ class Brain:
         Returns:
             Intent classificada
         """
-        # Preparar prompt para Claude
-        prompt = self._build_classification_prompt(message, context)
-        
-        # Chamar Claude via Bedrock
-        response = await self.bedrock.invoke_model(
-            model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        )
-        
-        # Parsear resposta
-        response_text = response.get('content', [{}])[0].get('text', '{}')
-        
         try:
-            # Tentar extrair JSON da resposta
-            import re
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                intent_data = json.loads(json_match.group())
-            else:
-                intent_data = json.loads(response_text)
-        except json.JSONDecodeError:
-            # Fallback: criar intent genérica
-            intent_data = {
-                'domain': 'retail',
-                'action': 'unknown',
-                'confidence': 0.5
-            }
-        
-        return Intent(
-            domain=intent_data.get('domain', 'retail'),
-            action=intent_data.get('action', 'unknown'),
-            connector=intent_data.get('connector'),
-            confidence=intent_data.get('confidence', 0.5),
-            entities=intent_data.get('entities', {})
-        )
+            # Preparar prompt para Claude
+            prompt = self._build_classification_prompt(message, context)
+            
+            # Chamar Claude via Bedrock
+            response = self.bedrock.invoke_model(
+                modelId=self.model_id,
+                body=json.dumps({
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 1000,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ]
+                })
+            )
+            
+            # Parse response
+            response_body = json.loads(response['body'].read())
+            claude_response = response_body['content'][0]['text']
+            
+            # Parse Claude's JSON response
+            try:
+                # Tentar extrair JSON da resposta
+                import re
+                json_match = re.search(r'\{.*\}', claude_response, re.DOTALL)
+                if json_match:
+                    intent_data = json.loads(json_match.group())
+                else:
+                    intent_data = json.loads(claude_response)
+            except json.JSONDecodeError:
+                # Fallback: criar intent genérica
+                intent_data = {
+                    'domain': 'retail',
+                    'action': 'unknown',
+                    'confidence': 0.5
+                }
+            
+            return Intent(
+                domain=intent_data.get('domain', 'retail'),
+                action=intent_data.get('action', 'unknown'),
+                connector=intent_data.get('connector'),
+                confidence=intent_data.get('confidence', 0.5),
+                entities=intent_data.get('entities', {})
+            )
+            
+        except Exception as e:
+            logger.error(f"Error classifying intent: {str(e)}")
+            # Fallback classification
+            return Intent(
+                domain="retail",
+                action="unknown",
+                confidence=0.0
+            )
     
     def _build_classification_prompt(
         self,
@@ -391,35 +514,64 @@ Responda APENAS com JSON válido, sem explicações adicionais.
         Returns:
             Resposta formatada em linguagem natural
         """
-        # Preparar prompt para Claude formatar resposta
-        prompt = f"""
-Você é um assistente de IA que formata respostas em linguagem natural.
+        try:
+            # Preparar prompt para Claude formatar resposta
+            prompt = f"""
+Você é um assistente de IA que formata respostas em linguagem natural para restaurantes.
 
 Formate a seguinte resposta de forma clara, concisa e amigável em português:
 
 Domínio: {intent.domain}
 Ação: {intent.action}
-Dados: {json.dumps(response_data)}
+Dados: {json.dumps(response_data, ensure_ascii=False, indent=2)}
 
 Responda em linguagem natural, sem JSON ou formatação técnica.
 Seja conciso e direto.
+Use emojis quando apropriado.
+Se houver erro, explique de forma amigável.
 """
-        
-        # Chamar Claude para formatar
-        response = await self.bedrock.invoke_model(
-            model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        )
-        
-        # Extrair texto da resposta
-        formatted_response = response.get('content', [{}])[0].get('text', '')
-        
-        return formatted_response.strip()
+            
+            # Chamar Claude para formatar
+            response = self.bedrock.invoke_model(
+                modelId=self.model_id,
+                body=json.dumps({
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 1000,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ]
+                })
+            )
+            
+            # Parse response
+            response_body = json.loads(response['body'].read())
+            formatted_response = response_body['content'][0]['text']
+            
+            return formatted_response.strip()
+            
+        except Exception as e:
+            logger.error(f"Error formatting response: {str(e)}")
+            
+            # Fallback: formatação simples
+            if response_data.get('success'):
+                if intent.action == 'check_orders':
+                    orders = response_data.get('orders', [])
+                    return f"📦 Você tem {len(orders)} pedidos"
+                elif intent.action == 'confirm_order':
+                    order_id = response_data.get('order_id')
+                    return f"✅ Pedido {order_id} confirmado"
+                elif intent.action == 'check_revenue':
+                    revenue = response_data.get('revenue', {})
+                    total = revenue.get('total_revenue', 0)
+                    return f"💰 Faturamento: R$ {total:.2f}"
+                else:
+                    return "✅ Operação realizada com sucesso"
+            else:
+                error = response_data.get('error', 'Erro desconhecido')
+                return f"❌ {error}"
     
     async def handle_event(
         self,

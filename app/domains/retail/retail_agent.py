@@ -22,6 +22,7 @@ from datetime import datetime
 import asyncio
 
 from app.core.brain import Intent, Context
+from app.core.auditor import Auditor, AuditCategory, AuditLevel
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ class RetailAgent:
             auditor: Serviço de auditoria
         """
         self.event_bus = event_bus
-        self.auditor = auditor
+        self.auditor = auditor or Auditor()
         self.state = RetailState()
         self.connectors = {}  # Conectores por tipo (ifood, 99food, etc)
         
@@ -96,18 +97,91 @@ class RetailAgent:
         Returns:
             Resultado da execução
         """
+        start_time = datetime.now()
+        
         try:
+            # Registrar início da operação na auditoria
+            await self.auditor.log_transaction(
+                email=context.email,
+                action=f"retail.{intent.action}.start",
+                input_data={
+                    'intent': intent.action,
+                    'connector': intent.connector,
+                    'entities': intent.entities,
+                    'confidence': intent.confidence
+                },
+                output_data={},
+                agent="retail_agent",
+                category=AuditCategory.BUSINESS_OPERATION,
+                level=AuditLevel.INFO,
+                status="started",
+                session_id=context.session_id,
+                channel=context.channel.value
+            )
+            
             # Verificar se tool existe
             if intent.action not in self.tools:
-                return {
+                error_result = {
                     'success': False,
                     'error': f"Ação '{intent.action}' não suportada",
                     'available_actions': list(self.tools.keys())
                 }
+                
+                # Registrar erro na auditoria
+                await self.auditor.log_transaction(
+                    email=context.email,
+                    action=f"retail.{intent.action}.error",
+                    input_data={
+                        'intent': intent.action,
+                        'available_actions': list(self.tools.keys())
+                    },
+                    output_data=error_result,
+                    agent="retail_agent",
+                    category=AuditCategory.ERROR_EVENT,
+                    level=AuditLevel.WARNING,
+                    status="error",
+                    error_message=error_result['error'],
+                    session_id=context.session_id,
+                    channel=context.channel.value
+                )
+                
+                return error_result
             
             # Executar tool
             tool = self.tools[intent.action]
             result = await tool(intent, context)
+            
+            # Calcular duração
+            end_time = datetime.now()
+            duration_ms = (end_time - start_time).total_seconds() * 1000
+            
+            # Determinar categoria de auditoria baseada na ação
+            audit_category = self._get_audit_category(intent.action)
+            audit_level = AuditLevel.INFO if result.get('success') else AuditLevel.ERROR
+            
+            # Detectar dados sensíveis
+            sensitive_data = self._contains_sensitive_data(intent, result)
+            financial_data = self._contains_financial_data(intent, result)
+            
+            # Registrar resultado na auditoria
+            await self.auditor.log_transaction(
+                email=context.email,
+                action=f"retail.{intent.action}",
+                input_data={
+                    'intent': intent.action,
+                    'connector': intent.connector,
+                    'entities': intent.entities
+                },
+                output_data=result,
+                agent="retail_agent",
+                category=audit_category,
+                level=audit_level,
+                status="success" if result.get('success') else "error",
+                error_message=result.get('error') if not result.get('success') else None,
+                duration_ms=duration_ms,
+                session_id=context.session_id,
+                channel=context.channel.value
+            )
             
             # Publicar evento
             if self.event_bus:
@@ -122,22 +196,13 @@ class RetailAgent:
                     }
                 )
             
-            # Registrar auditoria
-            if self.auditor:
-                await self.auditor.log_transaction(
-                    email=context.email,
-                    action=f"retail.{intent.action}",
-                    input_data={
-                        'intent': intent.action,
-                        'connector': intent.connector,
-                        'entities': intent.entities
-                    },
-                    output_data=result
-                )
-            
             return result
             
         except Exception as e:
+            # Calcular duração mesmo em caso de erro
+            end_time = datetime.now()
+            duration_ms = (end_time - start_time).total_seconds() * 1000
+            
             logger.error(f"Error executing retail action {intent.action}: {str(e)}")
             
             error_result = {
@@ -147,16 +212,23 @@ class RetailAgent:
             }
             
             # Registrar erro na auditoria
-            if self.auditor:
-                await self.auditor.log_transaction(
-                    email=context.email,
-                    action=f"retail.{intent.action}.error",
-                    input_data={
-                        'intent': intent.action,
-                        'connector': intent.connector
-                    },
-                    output_data=error_result
-                )
+            await self.auditor.log_transaction(
+                email=context.email,
+                action=f"retail.{intent.action}.exception",
+                input_data={
+                    'intent': intent.action,
+                    'connector': intent.connector
+                },
+                output_data=error_result,
+                agent="retail_agent",
+                category=AuditCategory.ERROR_EVENT,
+                level=AuditLevel.ERROR,
+                status="error",
+                error_message=str(e),
+                duration_ms=duration_ms,
+                session_id=context.session_id,
+                channel=context.channel.value
+            )
             
             return error_result
     
@@ -629,3 +701,65 @@ class RetailAgent:
         
         # TODO: Atualizar estatísticas
         # TODO: Analisar motivo do cancelamento
+    
+    def _get_audit_category(self, action: str) -> AuditCategory:
+        """
+        Determina categoria de auditoria baseada na ação
+        
+        Args:
+            action: Ação executada
+        
+        Returns:
+            Categoria de auditoria apropriada
+        """
+        if action in ['check_orders', 'check_revenue', 'forecast_demand']:
+            return AuditCategory.DATA_ACCESS
+        elif action in ['confirm_order', 'cancel_order', 'manage_store', 'update_inventory']:
+            return AuditCategory.DATA_MODIFICATION
+        else:
+            return AuditCategory.BUSINESS_OPERATION
+    
+    def _contains_sensitive_data(self, intent: Intent, result: Dict[str, Any]) -> bool:
+        """
+        Verifica se a operação contém dados sensíveis
+        
+        Args:
+            intent: Intenção executada
+            result: Resultado da operação
+        
+        Returns:
+            True se contém dados sensíveis
+        """
+        # Verificar se há informações de clientes
+        if 'orders' in result:
+            orders = result.get('orders', [])
+            for order in orders:
+                if isinstance(order, dict) and 'customer' in order:
+                    return True
+        
+        # Verificar se há dados de pagamento
+        if any(keyword in str(result).lower() for keyword in ['payment', 'card', 'pix']):
+            return True
+        
+        return False
+    
+    def _contains_financial_data(self, intent: Intent, result: Dict[str, Any]) -> bool:
+        """
+        Verifica se a operação contém dados financeiros
+        
+        Args:
+            intent: Intenção executada
+            result: Resultado da operação
+        
+        Returns:
+            True se contém dados financeiros
+        """
+        # Verificar ações relacionadas a dinheiro
+        if intent.action in ['check_revenue', 'check_orders']:
+            return True
+        
+        # Verificar se há valores monetários no resultado
+        if any(keyword in str(result).lower() for keyword in ['total', 'revenue', 'price', 'amount']):
+            return True
+        
+        return False

@@ -22,6 +22,7 @@ from aws_xray_sdk.core import patch_all
 from app.config.settings import settings
 from app.core.request_validator import RequestValidator
 from app.omnichannel.telegram_service import TelegramService
+from app.core.auditor import Auditor, AuditCategory, AuditLevel
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -275,9 +276,10 @@ async def telegram_webhook(request: Request):
                     from app.omnichannel.models import ChannelType
                     from app.config.secrets_manager import SecretsManager
                     
-                    # Inicializar Brain e Retail Agent
-                    brain = Brain()
-                    retail_agent = RetailAgent()
+                    # Inicializar Brain e Retail Agent com Auditor
+                    auditor = Auditor()
+                    brain = Brain(auditor=auditor)
+                    retail_agent = RetailAgent(auditor=auditor)
                     
                     # Registrar iFood connector real
                     secrets_manager = SecretsManager()
@@ -298,151 +300,8 @@ async def telegram_webhook(request: Request):
                         }
                     )
                     
-                    # Classificar intenção
-                    intent = await brain.classify_intent(text, existing_user.email)
-                    
-                    if intent.domain == "retail":
-                        # Executar via Retail Agent
-                        result = await retail_agent.execute(intent, context)
-                        
-                        if result.get('success'):
-                            if intent.action == "check_orders":
-                                orders = result.get('orders', [])
-                                if orders:
-                                    response_text = f"🍔 <b>Seus pedidos no iFood:</b>\n\n"
-                                    for i, order in enumerate(orders, 1):
-                                        status_emoji = {
-                                            'pending': '⏳',
-                                            'confirmed': '✅',
-                                            'preparing': '👨‍🍳',
-                                            'ready': '🍽️',
-                                            'delivered': '🚚',
-                                            'cancelled': '❌'
-                                        }.get(order.get('status', 'unknown'), '❓')
-                                        
-                                        response_text += (
-                                            f"{status_emoji} <b>Pedido #{order.get('id')}</b>\n"
-                                            f"💰 R$ {order.get('total', 0):.2f}\n"
-                                            f"👤 {order.get('customer', 'Cliente')}\n"
-                                            f"📦 {len(order.get('items', []))} itens\n\n"
-                                        )
-                                    
-                                    pending_count = result.get('pending_orders', 0)
-                                    if pending_count > 0:
-                                        response_text += f"⚠️ <b>{pending_count} pedidos precisam de confirmação!</b>"
-                                else:
-                                    response_text = "🍔 Nenhum pedido encontrado no iFood."
-                                    
-                            elif intent.action == "check_revenue":
-                                revenue = result.get('revenue', {})
-                                response_text = (
-                                    f"💰 <b>Faturamento iFood</b>\n\n"
-                                    f"📊 <b>Período:</b> {revenue.get('period', 'hoje')}\n"
-                                    f"💵 <b>Total:</b> R$ {revenue.get('total_revenue', 0):.2f}\n"
-                                    f"📦 <b>Pedidos:</b> {revenue.get('total_orders', 0)}\n"
-                                    f"🎯 <b>Ticket médio:</b> R$ {revenue.get('average_ticket', 0):.2f}\n\n"
-                                )
-                                
-                                top_items = revenue.get('top_items', [])[:3]
-                                if top_items:
-                                    response_text += "<b>🏆 Top 3 itens:</b>\n"
-                                    for i, item in enumerate(top_items, 1):
-                                        response_text += f"{i}. {item.get('name')} - {item.get('quantity')} vendas\n"
-                                        
-                            elif intent.action == "manage_store":
-                                store_result = result.get('result', result)
-                                action = result.get('action', 'status')
-                                status = store_result.get('status', 'unknown')
-                                
-                                status_emoji = {
-                                    'open': '🟢',
-                                    'closed': '🔴',
-                                    'paused': '🟡'
-                                }.get(status, '❓')
-                                
-                                response_text = (
-                                    f"🏪 <b>Status da Loja iFood</b>\n\n"
-                                    f"{status_emoji} <b>Status:</b> {status.upper()}\n"
-                                )
-                                
-                                if action != 'status':
-                                    response_text += f"✅ <b>Ação:</b> {action}\n"
-                                
-                                duration = result.get('duration')
-                                if duration:
-                                    response_text += f"⏰ <b>Duração:</b> {duration}\n"
-                                    
-                            elif intent.action == "confirm_order":
-                                order_id = result.get('order_id')
-                                response_text = (
-                                    f"✅ <b>Pedido Confirmado!</b>\n\n"
-                                    f"📦 <b>Pedido:</b> #{order_id}\n"
-                                    f"🕐 <b>Confirmado em:</b> {datetime.now().strftime('%H:%M')}\n"
-                                    f"⏱️ <b>Tempo estimado:</b> 25 minutos"
-                                )
-                                
-                            elif intent.action == "cancel_order":
-                                order_id = result.get('order_id')
-                                reason = result.get('reason', 'Cancelado pelo restaurante')
-                                response_text = (
-                                    f"❌ <b>Pedido Cancelado</b>\n\n"
-                                    f"📦 <b>Pedido:</b> #{order_id}\n"
-                                    f"📝 <b>Motivo:</b> {reason}\n"
-                                    f"🕐 <b>Cancelado em:</b> {datetime.now().strftime('%H:%M')}"
-                                )
-                                
-                            else:
-                                response_text = (
-                                    f"✅ <b>Ação executada:</b> {intent.action}\n\n"
-                                    f"📋 <b>Resultado:</b> {result.get('message', 'Sucesso')}"
-                                )
-                        else:
-                            # Erro na execução
-                            error = result.get('error', 'Erro desconhecido')
-                            response_text = (
-                                f"❌ <b>Erro ao executar ação</b>\n\n"
-                                f"🔧 <b>Ação:</b> {intent.action}\n"
-                                f"📝 <b>Erro:</b> {error}\n\n"
-                                "Tente novamente em alguns segundos."
-                            )
-                    elif intent.domain == "general":
-                        if intent.action == "greeting":
-                            response_text = (
-                                f"👋 Olá {existing_user.email}!\n\n"
-                                "🍔 Como posso ajudar com seus pedidos do iFood hoje?\n\n"
-                                "Experimente:\n"
-                                "• 'Quantos pedidos tenho?'\n"
-                                "• 'Qual meu faturamento hoje?'\n"
-                                "• 'Feche a loja por 30 minutos'"
-                            )
-                        elif intent.action == "help":
-                            response_text = (
-                                "🆘 AJUDA - AgentFirst\n\n"
-                                "🍔 PEDIDOS:\n"
-                                "• 'Quantos pedidos tenho?'\n"
-                                "• 'Confirme o pedido 123'\n"
-                                "• 'Cancele o último pedido'\n\n"
-                                "💰 FATURAMENTO:\n"
-                                "• 'Qual meu faturamento hoje?'\n"
-                                "• 'Relatório da semana'\n\n"
-                                "🏪 LOJA:\n"
-                                "• 'Feche a loja por 30min'\n"
-                                "• 'Abra a loja'"
-                            )
-                        else:
-                            response_text = (
-                                f"🤖 Olá {existing_user.email}!\n\n"
-                                f"Recebi: <b>{text}</b>\n\n"
-                                "🔧 Brain funcionando! Classificação:\n"
-                                f"📋 Domínio: {intent.domain}\n"
-                                f"⚡ Ação: {intent.action}\n"
-                                f"🎯 Confiança: {intent.confidence:.0%}"
-                            )
-                    else:
-                        response_text = (
-                            f"🤖 Brain classificou como: {intent.domain}.{intent.action}\n\n"
-                            "🔧 Este domínio ainda não foi implementado."
-                        )
+                    # Processar mensagem via Brain (com auditoria integrada)
+                    response_text = await brain.process(text, context)
         
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}")
