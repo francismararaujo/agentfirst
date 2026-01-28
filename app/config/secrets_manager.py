@@ -75,6 +75,13 @@ class SecretsManager:
             return secret.get("bot_token")
         return secret
 
+    def get_telegram_chat_id(self) -> Optional[str]:
+        """Get Telegram chat ID from Secrets Manager"""
+        secret = self.get_secret("AgentFirst/telegram-bot-token")
+        if secret and isinstance(secret, dict):
+            return secret.get("chat_id")
+        return None
+
     def get_ifood_credentials(self) -> Optional[Dict[str, str]]:
         """Get iFood OAuth credentials from Secrets Manager"""
         secret = self.get_secret("ifood-oauth-credentials")

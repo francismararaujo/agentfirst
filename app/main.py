@@ -317,11 +317,14 @@ async def telegram_webhook(request: Request):
                     retail_agent.register_connector('ifood', ifood_connector)
                     brain.register_agent('retail', retail_agent)
                     
+                    # Get supervisor chat ID from secrets or fallback to current chat
+                    supervisor_chat_id = secrets_manager.get_telegram_chat_id() or str(chat_id)
+                    
                     # Configure supervisor for H.I.T.L.
                     brain.configure_supervisor(
                         supervisor_id="default",
                         name="Supervisor Padrão",
-                        telegram_chat_id=str(chat_id),
+                        telegram_chat_id=supervisor_chat_id,
                         specialties=["retail", "general"],
                         priority_threshold=1
                     )
