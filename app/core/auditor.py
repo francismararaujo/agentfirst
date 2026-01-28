@@ -22,6 +22,7 @@ import logging
 import json
 import hashlib
 import hmac
+from app.config.settings import settings
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, asdict
@@ -202,7 +203,7 @@ class Auditor:
     - Relatórios de auditoria
     """
     
-    def __init__(self, table_name: str = "AgentFirst-AuditLogs", region: str = "us-east-1"):
+    def __init__(self, table_name: Optional[str] = None, region: Optional[str] = None):
         """
         Inicializa auditor
         
@@ -210,10 +211,10 @@ class Auditor:
             table_name: Nome da tabela DynamoDB
             region: Região AWS
         """
-        self.table_name = table_name
-        self.region = region
-        self.dynamodb = boto3.resource('dynamodb', region_name=region)
-        self.table = self.dynamodb.Table(table_name)
+        self.table_name = table_name or settings.DYNAMODB_AUDIT_TABLE
+        self.region = region or settings.AWS_REGION
+        self.dynamodb = boto3.resource('dynamodb', region_name=self.region)
+        self.table = self.dynamodb.Table(self.table_name)
         
         # Configurações de compliance
         self.retention_days = 365  # 1 ano (LGPD requirement)
