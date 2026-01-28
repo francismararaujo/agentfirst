@@ -66,7 +66,7 @@ class TelegramService:
         """
         try:
             payload = {
-                "chat_id": chat_id,
+                "chat_id": int(chat_id),
                 "text": text,
                 "parse_mode": parse_mode,
             }

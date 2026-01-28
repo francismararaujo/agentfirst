@@ -266,6 +266,14 @@ async def telegram_webhook(request: Request):
             return {"ok": True}
 
         logger.info(f"Processing message from user {user_id}: {text}")
+        logger.info(f"Chat ID: {chat_id} (Type: {type(chat_id)})")
+        
+        # Ensure chat_id is int for Telegram API
+        try:
+            chat_id = int(chat_id)
+        except (ValueError, TypeError):
+             logger.error(f"Invalid chat_id format: {chat_id}")
+             return {"ok": True}
 
         # Initialize Telegram service
         telegram = TelegramService()
