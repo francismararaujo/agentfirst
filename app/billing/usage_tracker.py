@@ -5,6 +5,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
 import boto3
 from botocore.exceptions import ClientError
+from app.config.settings import settings
 
 
 @dataclass
@@ -58,8 +59,8 @@ class Usage:
 @dataclass
 class UsageTrackerConfig:
     """Configuration for usage tracker"""
-    region: str = "us-east-1"
-    usage_table: str = "usage"
+    region: str = settings.AWS_REGION
+    usage_table: str = settings.DYNAMODB_USAGE_TABLE
     email_index: str = "email-index"
 
 

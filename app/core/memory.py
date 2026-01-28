@@ -13,6 +13,7 @@ from typing import Dict, Optional, Any, List
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 import json
+from app.config.settings import settings
 
 
 @dataclass
@@ -42,7 +43,7 @@ class MemoryService:
     Serviço de memória usando DynamoDB
     """
     
-    def __init__(self, dynamodb_client, table_name: str = 'memory'):
+    def __init__(self, dynamodb_client, table_name: Optional[str] = None):
         """
         Inicializa Memory Service
         
@@ -51,7 +52,7 @@ class MemoryService:
             table_name: Nome da tabela
         """
         self.dynamodb = dynamodb_client
-        self.table_name = table_name
+        self.table_name = table_name or settings.DYNAMODB_MEMORY_TABLE
     
     async def get_context(self, email: str) -> Dict[str, Any]:
         """
