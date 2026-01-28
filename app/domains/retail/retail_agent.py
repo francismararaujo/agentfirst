@@ -23,6 +23,8 @@ import asyncio
 
 from app.core.brain import Intent, Context
 from app.core.auditor import Auditor, AuditCategory, AuditLevel
+from app.core.event_bus import EventMessage
+from app.omnichannel.database.repositories import UserRepository
 
 logger = logging.getLogger(__name__)
 
@@ -674,33 +676,114 @@ class RetailAgent:
         """Processa novo pedido"""
         order_id = event_data.get('order_id')
         connector = event_data.get('connector')
+        merchant_id = event_data.get('merchant_id')
+        total_amount = event_data.get('total_amount')
         
         logger.info(f"New order received: {order_id} from {connector}")
         
-        # TODO: Notificar usuário em todos os canais
-        # TODO: Atualizar estatísticas
-        # TODO: Verificar se requer atenção especial
+        try:
+            # 1. Notificar usuário em todos os canais
+            from app.omnichannel.interface import OmnichannelInterface
+            user_repo = UserRepository()
+            user = await user_repo.get_by_email(f"merchant_{merchant_id}@ifood.com")
+            
+            if user and hasattr(self, 'omnichannel_interface'):
+                order_notification = {
+                    "order_id": order_id,
+                    "total_amount": total_amount,
+                    "customer": event_data.get("customer", {}),
+                    "items": event_data.get("items", [])
+                }
+                await self.omnichannel_interface.handle_new_order_notification(
+                    email=user.email,
+                    order_data=order_notification,
+                    connector=connector
+                )
+            
+            # 2. Atualizar estatísticas
+            await self.auditor.log_transaction(
+                email=f"merchant_{merchant_id}@ifood.com",
+                action="new_order_received",
+                category=AuditCategory.BUSINESS_OPERATION,
+                level=AuditLevel.INFO,
+                input_data={"order_id": order_id, "connector": connector, "total_amount": total_amount},
+                output_data={"notified": True}
+            )
+            
+            # 3. Verificar se requer atenção especial
+            if total_amount and total_amount > 500:
+                await self.supervisor.evaluate_decision(
+                    decision_type="high_value_order",
+                    context={"order_id": order_id, "total_amount": total_amount, "connector": connector},
+                    user_email=f"merchant_{merchant_id}@ifood.com"
+                )
+        except Exception as e:
+            logger.error(f"Error handling new order: {str(e)}", exc_info=True)
     
     async def _handle_order_confirmed(self, event_data: Dict[str, Any]) -> None:
         """Processa confirmação de pedido"""
         order_id = event_data.get('order_id')
         connector = event_data.get('connector')
+        merchant_id = event_data.get('merchant_id')
         
         logger.info(f"Order confirmed: {order_id} from {connector}")
         
-        # TODO: Atualizar status interno
-        # TODO: Iniciar preparação
+        try:
+            # 1. Atualizar status interno
+            await self.auditor.log_transaction(
+                email=f"merchant_{merchant_id}@ifood.com",
+                action="order_confirmed",
+                category=AuditCategory.BUSINESS_OPERATION,
+                level=AuditLevel.INFO,
+                input_data={"order_id": order_id, "connector": connector},
+                output_data={"status": "confirmed"}
+            )
+            
+            # 2. Iniciar preparação
+            from datetime import datetime
+            await self.event_bus.publish_event(
+                event=EventMessage(
+                    event_type="order.preparation_started",
+                    source="retail_agent",
+                    user_email=f"merchant_{merchant_id}@ifood.com",
+                    data={"order_id": order_id, "connector": connector, "timestamp": datetime.now().isoformat()}
+                )
+            )
+        except Exception as e:
+            logger.error(f"Error handling order confirmation: {str(e)}", exc_info=True)
     
     async def _handle_order_cancelled(self, event_data: Dict[str, Any]) -> None:
         """Processa cancelamento de pedido"""
         order_id = event_data.get('order_id')
         reason = event_data.get('reason')
         connector = event_data.get('connector')
+        merchant_id = event_data.get('merchant_id')
         
         logger.info(f"Order cancelled: {order_id} from {connector}, reason: {reason}")
         
-        # TODO: Atualizar estatísticas
-        # TODO: Analisar motivo do cancelamento
+        try:
+            # 1. Atualizar estatísticas
+            await self.auditor.log_transaction(
+                email=f"merchant_{merchant_id}@ifood.com",
+                action="order_cancelled",
+                category=AuditCategory.BUSINESS_OPERATION,
+                level=AuditLevel.WARNING,
+                input_data={"order_id": order_id, "connector": connector, "reason": reason},
+                output_data={"status": "cancelled"}
+            )
+            
+            # 2. Analisar motivo do cancelamento
+            if reason in ["customer_request", "payment_failed", "out_of_stock"]:
+                await self.event_bus.publish_event(
+                    event=EventMessage(
+                        event_type="order.cancellation_analyzed",
+                        source="retail_agent",
+                        user_email=f"merchant_{merchant_id}@ifood.com",
+                        data={"order_id": order_id, "connector": connector, "reason": reason, "category": "cancellation_analysis"}
+                    )
+                )
+        except Exception as e:
+            logger.error(f"Error handling order cancellation: {str(e)}", exc_info=True)
     
     def _get_audit_category(self, action: str) -> AuditCategory:
         """

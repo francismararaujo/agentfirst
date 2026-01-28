@@ -392,11 +392,11 @@ class OmnichannelInterface:
                             "success": result.get("ok", False),
                             "message_id": result.get("result", {}).get("message_id")
                         }
-                    # TODO: Add WhatsApp, Web, App channel adapters here
+                    # Future: Add WhatsApp, Web, App channel adapters (MVP 3)
                     else:
                         notification_results[channel_type.value] = {
                             "success": False,
-                            "error": "channel_adapter_not_implemented"
+                            "error": "channel_adapter_not_implemented_yet"
                         }
                         
                 except Exception as e:
