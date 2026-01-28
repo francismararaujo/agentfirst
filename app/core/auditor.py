@@ -444,12 +444,27 @@ class Auditor:
             audit_entry: Entrada de auditoria
         """
         try:
+            # Helper to convert floats to Decimal for DynamoDB
+            from decimal import Decimal
+            
+            def convert_floats(obj):
+                if isinstance(obj, float):
+                    return Decimal(str(obj))
+                elif isinstance(obj, dict):
+                    return {k: convert_floats(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_floats(i) for i in obj]
+                return obj
+
             # Preparar item para DynamoDB
             item = audit_entry.to_dict()
             
-            # Converter enums para strings
+            # Converter enums para strings e floats para Decimal
             item['category'] = audit_entry.category.value
             item['level'] = audit_entry.level.value
+            item['input_data'] = convert_floats(item['input_data'])
+            item['output_data'] = convert_floats(item['output_data'])
+            item['context'] = convert_floats(item['context']) if item.get('context') else {}
             
             # Adicionar TTL (1 ano)
             ttl_timestamp = int((datetime.now(timezone.utc) + timedelta(days=self.retention_days)).timestamp())
