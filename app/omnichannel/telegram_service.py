@@ -27,9 +27,13 @@ class TelegramService:
         """
         if bot_token:
             self.bot_token = bot_token
-        else:
-            # Hardcode temporário para testar
-            self.bot_token = "8164221464:AAGTNth9jfLRFA60fuf9GicBtc9CaTuMXiU"
+            from app.config.settings import settings
+            self.bot_token = settings.TELEGRAM_BOT_TOKEN
+            
+            # If not in settings, try to get from Secrets Manager (async, so we just set a place holder 
+            # or handle it in the methods if needed, but for MVP env var is preferred)
+            if not self.bot_token:
+                 logger.warning("Telegram Bot Token not set in settings. Callers must ensure it is available or provided.")
 
         self.api_url = f"https://api.telegram.org/bot{self.bot_token}"
 
