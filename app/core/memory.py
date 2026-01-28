@@ -170,7 +170,7 @@ class MemoryService:
                     'domain': {'S': domain or 'global'},
                     'key': {'S': key},
                     'value': {'S': value_str},
-                    'timestamp': {'S': timestamp},
+                    'timestamp': {'N': str(int(datetime.now().timestamp()))},
                     'ttl': {'N': str(ttl)}
                 }
                 

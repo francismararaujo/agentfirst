@@ -681,7 +681,10 @@ class Supervisor:
     async def _store_escalation(self, escalation: EscalationRequest):
         """Armazena escalação no DynamoDB"""
         try:
-            item = escalation.to_dict()
+            # Helper to convert floats to Decimal
+            from app.shared.utils import to_decimal
+            
+            item = to_decimal(escalation.to_dict())
             
             # Chaves para DynamoDB
             item['PK'] = escalation.escalation_id

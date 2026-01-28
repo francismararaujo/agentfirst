@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     SQS_DLQ_URL: str = os.getenv("SQS_DLQ_URL", "")
 
     # Bedrock Configuration
-    BEDROCK_MODEL_ID: str = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20241022-v2:0")
+    BEDROCK_MODEL_ID: str = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-3-5-sonnet-20241022-v2:0")
     BEDROCK_REGION: str = os.getenv("BEDROCK_REGION", "us-east-1")
 
     # Telegram Configuration
