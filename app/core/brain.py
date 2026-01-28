@@ -17,6 +17,7 @@ from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
 
+from app.config.settings import settings
 from app.omnichannel.models import ChannelType
 from app.core.auditor import Auditor, AuditCategory, AuditLevel
 from app.core.supervisor import Supervisor
@@ -76,7 +77,7 @@ class Brain:
             supervisor: Supervisor (H.I.T.L.)
         """
         if bedrock_client is None:
-            self.bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
+            self.bedrock = boto3.client('bedrock-runtime', region_name=settings.BEDROCK_REGION)
         else:
             self.bedrock = bedrock_client
             
@@ -85,7 +86,7 @@ class Brain:
         self.auditor = auditor or Auditor()
         self.supervisor = supervisor or Supervisor(auditor=self.auditor)
         self.agents = {}  # Agentes por domínio
-        self.model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        self.model_id = settings.BEDROCK_MODEL_ID
     
     def register_agent(self, domain: str, agent):
         """

@@ -26,6 +26,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 import boto3
 from botocore.exceptions import ClientError
+from app.config.settings import settings
 
 from app.core.auditor import Auditor, AuditCategory, AuditLevel
 
@@ -181,8 +182,8 @@ class Supervisor:
             auditor: Serviço de auditoria
             telegram_service: Serviço do Telegram para notificações
         """
-        self.table_name = table_name
-        self.region = region
+        self.table_name = table_name or settings.DYNAMODB_ESCALATION_TABLE
+        self.region = region or settings.AWS_REGION
         self.auditor = auditor or Auditor()
         self.telegram_service = telegram_service
         
