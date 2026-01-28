@@ -80,14 +80,19 @@ class OmnichannelInterface:
         
         # Initialize core services
         from app.omnichannel.authentication.auth_service import AuthConfig
-        auth_config = AuthConfig(region="us-east-1", users_table="users")
+        from app.config.settings import settings
+        
+        auth_config = AuthConfig(
+            region=settings.AWS_REGION,
+            users_table=settings.DYNAMODB_USERS_TABLE
+        )
         self.auth_service = AuthService(auth_config)
         
         self.session_manager = SessionManager()
         
         # Initialize MemoryService with DynamoDB client
         import boto3
-        dynamodb_client = boto3.client('dynamodb', region_name='us-east-1')
+        dynamodb_client = boto3.client('dynamodb', region_name=settings.AWS_REGION)
         self.memory_service = MemoryService(dynamodb_client)
         self.user_repository = UserRepository()
         
