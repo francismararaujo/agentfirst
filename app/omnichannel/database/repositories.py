@@ -281,7 +281,8 @@ class UsageRepository(DynamoDBRepository):
         """Get usage by email and month"""
         try:
             table = self.get_table(settings.DYNAMODB_USAGE_TABLE)
-            response = table.get_item(Key={'email': email, 'month': f"{year}#{month}"})
+            # Use zero-padded month for consistent composite key
+            response = table.get_item(Key={'email': email, 'month': f"{year}#{month:02d}"})
             
             if 'Item' in response:
                 return Usage.from_dynamodb(response['Item'])
@@ -295,8 +296,9 @@ class UsageRepository(DynamoDBRepository):
         try:
             table = self.get_table(settings.DYNAMODB_USAGE_TABLE)
             
+            # Use zero-padded month for consistent composite key
             response = table.update_item(
-                Key={'email': email, 'month': f"{year}#{month}"},
+                Key={'email': email, 'month': f"{year}#{month:02d}"},
                 UpdateExpression="ADD message_count :inc",
                 ExpressionAttributeValues={':inc': 1},
                 ReturnValues='ALL_NEW'

@@ -118,12 +118,27 @@ class Usage:
         """Convert to DynamoDB format"""
         data = asdict(self)
         data['tier'] = self.tier.value
+        # Create composite sort key matching DynamoDB schema (String)
+        # Using zero-padding for correct lexical sorting
+        data['month'] = f"{self.year}#{self.month:02d}"
         return data
 
     @classmethod
     def from_dynamodb(cls, data: Dict[str, Any]) -> 'Usage':
         """Convert from DynamoDB format"""
         data['tier'] = UserTier(data.get('tier', 'free'))
+        
+        # Parse composite month string back to integer if necessary
+        # The Usage dataclass expects month to be an int
+        if isinstance(data.get('month'), str) and '#' in data['month']:
+            try:
+                # Format "YYYY#MM" -> extract MM
+                _, month_str = data['month'].split('#')
+                data['month'] = int(month_str)
+            except (ValueError, IndexError):
+                # Fallback or keep as is if parsing fails (shouldn't happen with correct data)
+                pass
+                
         return cls(**data)
 
 
