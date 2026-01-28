@@ -460,6 +460,13 @@ class Auditor:
             item['SK'] = f"AUDIT#{audit_entry.timestamp}#{audit_entry.audit_id}"
             item['email'] = audit_entry.user_email  # Required by table schema
             
+            # Convert timestamp to number for DynamoDB (expected N)
+            try:
+                dt = datetime.fromisoformat(audit_entry.timestamp.replace('Z', '+00:00'))
+                item['timestamp'] = int(dt.timestamp())
+            except ValueError:
+                item['timestamp'] = int(datetime.now(timezone.utc).timestamp())
+            
             # Armazenar
             self.table.put_item(Item=item)
             
