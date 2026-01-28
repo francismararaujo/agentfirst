@@ -66,7 +66,8 @@ class MemoryService:
         """
         try:
             # Buscar todos os itens para este email
-            response = await self.dynamodb.query(
+            # Boto3 client is synchronous, do not await!
+            response = self.dynamodb.query(
                 TableName=self.table_name,
                 KeyConditionExpression='email = :email',
                 ExpressionAttributeValues={
@@ -174,7 +175,8 @@ class MemoryService:
                 }
                 
                 # Salvar em DynamoDB
-                await self.dynamodb.put_item(
+                # Boto3 client is synchronous, do not await!
+                self.dynamodb.put_item(
                     TableName=self.table_name,
                     Item=item
                 )
@@ -199,7 +201,8 @@ class MemoryService:
         """
         try:
             # Buscar itens para este email e domínio
-            response = await self.dynamodb.query(
+            # Boto3 client is synchronous, do not await!
+            response = self.dynamodb.query(
                 TableName=self.table_name,
                 KeyConditionExpression='email = :email AND domain = :domain',
                 ExpressionAttributeValues={
@@ -347,7 +350,8 @@ class MemoryService:
             
             # Deletar cada item
             for item in response.get('Items', []):
-                await self.dynamodb.delete_item(
+                # Boto3 client is synchronous, do not await!
+                self.dynamodb.delete_item(
                     TableName=self.table_name,
                     Key={
                         'email': item['email'],
