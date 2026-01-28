@@ -543,7 +543,12 @@ class Auditor:
             logger.error(f"Error retrieving audit logs: {e}")
             return []
     
-    def __init__(self, table_name: Optional[str] = None, region: Optional[str] = None):
+    async def generate_compliance_report(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        user_email: Optional[str] = None
+    ) -> ComplianceReport:
         """
         Gera relatório de compliance
         
