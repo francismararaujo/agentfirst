@@ -273,7 +273,7 @@ class Auditor:
             # Timestamp preciso com timezone
             now = datetime.now(timezone.utc)
             timestamp = now.isoformat() + 'Z'
-            timezone = 'UTC'
+            tz_name = 'UTC'
             
             # Detectar dados sensíveis
             sensitive_data = self._detect_sensitive_data(input_data, output_data)
@@ -284,7 +284,7 @@ class Auditor:
             audit_entry = AuditEntry(
                 audit_id=audit_id,
                 timestamp=timestamp,
-                timezone=timezone,
+                timezone=tz_name,
                 user_email=email,
                 user_id=None,  # Pode ser expandido
                 session_id=session_id,
