@@ -154,7 +154,6 @@ class SessionManager:
 
         try:
             response = self.table.query(
-                IndexName=self.config.email_index,
                 KeyConditionExpression='email = :email',
                 ExpressionAttributeValues={':email': email},
                 ScanIndexForward=False,  # Sort by created_at descending
@@ -183,7 +182,6 @@ class SessionManager:
 
         try:
             response = self.table.query(
-                IndexName=self.config.email_index,
                 KeyConditionExpression='email = :email',
                 ExpressionAttributeValues={':email': email}
             )
