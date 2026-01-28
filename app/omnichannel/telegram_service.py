@@ -32,7 +32,16 @@ class TelegramService:
             self.bot_token = settings.TELEGRAM_BOT_TOKEN
             
             if not self.bot_token:
-                 logger.warning("Telegram Bot Token not set in settings. Callers must ensure it is available or provided.")
+                 logger.info("Telegram Bot Token not found in settings, attempting to fetch from Secrets Manager...")
+                 try:
+                     self.bot_token = SecretsManager().get_telegram_token()
+                     if self.bot_token:
+                         logger.info("Successfully retrieved Telegram Bot Token from Secrets Manager")
+                 except Exception as e:
+                     logger.warning(f"Failed to fetch token from Secrets Manager: {e}")
+
+            if not self.bot_token:
+                 logger.warning("Telegram Bot Token not available. Service may fail to send messages.")
 
         self.api_url = f"https://api.telegram.org/bot{self.bot_token}"
 

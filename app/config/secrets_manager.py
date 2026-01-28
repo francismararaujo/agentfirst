@@ -68,7 +68,7 @@ class SecretsManager:
 
     def get_telegram_token(self) -> Optional[str]:
         """Get Telegram bot token from Secrets Manager"""
-        secret = self.get_secret("telegram-bot-token")
+        secret = self.get_secret("agentfirst/telegram")
         if secret and isinstance(secret, dict):
             return secret.get("token")
         return secret
