@@ -458,6 +458,7 @@ class Auditor:
             # Chaves para DynamoDB
             item['PK'] = audit_entry.user_email
             item['SK'] = f"AUDIT#{audit_entry.timestamp}#{audit_entry.audit_id}"
+            item['email'] = audit_entry.user_email  # Required by table schema
             
             # Armazenar
             self.table.put_item(Item=item)
