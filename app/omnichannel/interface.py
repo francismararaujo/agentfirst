@@ -217,7 +217,7 @@ class OmnichannelInterface:
                 user_profile={
                     'tier': user.tier.value,
                     'telegram_id': getattr(user, 'telegram_id', None),
-                    'created_at': user.created_at.isoformat() if user.created_at else None
+                    'created_at': user.created_at if user.created_at else None
                 },
                 history=context_data.get('conversation_history', []),
                 memory={
