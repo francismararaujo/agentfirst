@@ -73,7 +73,7 @@ class UniversalMessageProcessor:
             )
         
         # 2. Retrieve session
-        session = await self.session_manager.get(email)
+        session = await self.session_manager.get_session_by_email(email)
         if not session:
             raise ValueError(f"No session found for email {email}")
         
