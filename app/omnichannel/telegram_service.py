@@ -27,11 +27,10 @@ class TelegramService:
         """
         if bot_token:
             self.bot_token = bot_token
+        else:
             from app.config.settings import settings
             self.bot_token = settings.TELEGRAM_BOT_TOKEN
             
-            # If not in settings, try to get from Secrets Manager (async, so we just set a place holder 
-            # or handle it in the methods if needed, but for MVP env var is preferred)
             if not self.bot_token:
                  logger.warning("Telegram Bot Token not set in settings. Callers must ensure it is available or provided.")
 
