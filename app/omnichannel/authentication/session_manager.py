@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any
 import uuid
 import boto3
 from botocore.exceptions import ClientError
+from app.config.settings import settings
 
 
 @dataclass
@@ -63,9 +64,9 @@ class Session:
 @dataclass
 class SessionConfig:
     """Configuration for session management"""
-    region: str = "us-east-1"
-    sessions_table: str = "sessions"
-    ttl_hours: int = 24
+    region: str = settings.AWS_REGION
+    sessions_table: str = settings.DYNAMODB_SESSIONS_TABLE
+    ttl_hours: int = settings.SESSION_TTL_HOURS
     email_index: str = "email-index"
 
 
