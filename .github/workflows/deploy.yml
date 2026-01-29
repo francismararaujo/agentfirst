@@ -39,10 +39,9 @@ jobs:
           pip install -r infra/cdk/requirements.txt
           
       - name: CDK Deploy
-        env:
-          PYTHONPATH: .
         run: |
           echo "🚀 Deploying Infrastructure & Code with CDK..."
+          cd infra/cdk
           cdk deploy --all --require-approval never
       
       - name: Test deployment
