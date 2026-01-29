@@ -478,11 +478,11 @@ async def ifood_webhook(request: Request):
             auditor = Auditor()
             supervisor = Supervisor(auditor=auditor, telegram_service=None)
             
-                    # Initialize EventBus with SNS/SQS
-                    event_bus_config = EventBusConfig(
-                        region=settings.AWS_REGION,
-                        sns_topic_arn=settings.SNS_OMNICHANNEL_TOPIC_ARN
-                    )
+            # Initialize EventBus with SNS/SQS
+            event_bus_config = EventBusConfig(
+                region=settings.AWS_REGION,
+                sns_topic_arn=settings.SNS_OMNICHANNEL_TOPIC_ARN
+            )
             event_bus = EventBus(event_bus_config)
             
             # Initialize Brain
