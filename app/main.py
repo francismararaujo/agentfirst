@@ -293,7 +293,7 @@ async def telegram_webhook(request: Request):
             user = await user_repo.get_by_telegram_id(user_id)
             
             # Check if user needs authentication handling (Not found OR Unverified)
-            needs_auth = (not user) or (user.tier == 'unverified')
+            needs_auth = (not user) or (user.tier == UserTier.UNVERIFIED)
             
             if needs_auth:
                 # Initialize Authentication Services
