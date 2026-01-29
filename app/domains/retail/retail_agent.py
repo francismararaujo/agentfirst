@@ -74,7 +74,8 @@ class RetailAgent:
             'check_revenue': self.check_revenue,
             'manage_store': self.manage_store,
             'update_inventory': self.update_inventory,
-            'forecast_demand': self.forecast_demand
+            'forecast_demand': self.forecast_demand,
+            'greeting': self.greeting
         }
     
     def register_connector(self, connector_type: str, connector):
@@ -645,6 +646,23 @@ class RetailAgent:
                 'success': False,
                 'error': f"Erro ao prever demanda: {str(e)}"
             }
+
+    async def greeting(self, intent: Intent, context: Context) -> Dict[str, Any]:
+        """
+        Responde a cumprimentos
+        
+        Args:
+            intent: Intenção
+            context: Contexto
+        
+        Returns:
+            Mensagem de saudação
+        """
+        return {
+            'success': True,
+            'message': "Olá! Sou seu assistente de varejo. Como posso ajudar com seus pedidos, estoque ou faturamento hoje?",
+            'options': ['Ver pedidos', 'Ver faturamento', 'Gerenciar loja']
+        }
     
     async def handle_event(self, event_type: str, event_data: Dict[str, Any]) -> None:
         """

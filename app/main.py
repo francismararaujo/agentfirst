@@ -436,7 +436,7 @@ async def ifood_webhook(request: Request):
         # Validate HMAC signature (iFood requirement)
         try:
             secrets_manager = SecretsManager()
-            ifood_secret = await secrets_manager.get_secret("ifood/webhook-secret")
+            ifood_secret = secrets_manager.get_secret("ifood/webhook-secret")
             
             # Calculate expected signature
             expected_signature = hmac.new(

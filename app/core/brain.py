@@ -398,6 +398,7 @@ class Brain:
                 confidence=0.0
             )
     
+
     def _build_classification_prompt(
         self,
         message: str,
@@ -417,11 +418,16 @@ class Brain:
 Você é um assistente de IA que classifica intenções de usuários em linguagem natural.
 
 Classifique a seguinte mensagem em JSON com os campos:
-- domain: retail, tax, finance, sales, hr, marketing, health, legal, education
-- action: ação específica (check_orders, confirm_order, cancel_order, get_revenue, etc)
+- domain: retail (padrão para lojistas), tax, finance, sales, hr, marketing, health, legal, education
+- action: ação específica (check_orders, confirm_order, cancel_order, get_revenue, greeting, etc)
 - connector: conector específico se aplicável (ifood, 99food, shoppe, amazon, etc)
 - confidence: confiança da classificação (0-1)
 - entities: dicionário com entidades extraídas (order_id, duration, date, etc)
+
+Regras específicas:
+1. Se o usuário apenas cumprimentar (oi, olá, bom dia, tudo bem), classifique como domain='retail', action='greeting'.
+2. Se a intenção não for clara mas parecer relacionada a vendas/pedidos, use domain='retail'.
+3. Se for sobre impostos/fiscal, use domain='tax'.
 
 Contexto:
 - Email do usuário: {context.email}

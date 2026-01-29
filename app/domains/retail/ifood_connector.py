@@ -153,7 +153,7 @@ class iFoodConnector(BaseConnector):
             Credenciais do iFood
         """
         if self.credentials is None:
-            secret = await self.secrets_manager.get_secret("AgentFirst/ifood-credentials")
+            secret = self.secrets_manager.get_secret("AgentFirst/ifood-credentials")
             self.credentials = iFoodCredentials(
                 client_id=secret['client_id'],
                 client_secret=secret['client_secret'],
