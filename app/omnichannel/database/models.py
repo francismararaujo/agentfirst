@@ -50,9 +50,18 @@ class User:
     @classmethod
     def from_dynamodb(cls, data: Dict[str, Any]) -> 'User':
         """Convert from DynamoDB format"""
-        data['tier'] = UserTier(data.get('tier', 'free'))
-        data['payment_status'] = PaymentStatus(data.get('payment_status', 'active'))
-        return cls(**data)
+        # Filter to only known User fields
+        known_fields = {
+            'email', 'tier', 'created_at', 'updated_at', 'telegram_id',
+            'usage_month', 'usage_total', 'payment_status', 'trial_ends_at'
+        }
+        filtered_data = {k: v for k, v in data.items() if k in known_fields}
+        
+        # Convert enum fields
+        filtered_data['tier'] = UserTier(filtered_data.get('tier', 'free'))
+        filtered_data['payment_status'] = PaymentStatus(filtered_data.get('payment_status', 'active'))
+        
+        return cls(**filtered_data)
 
 
 @dataclass
