@@ -8,6 +8,7 @@ from enum import Enum
 
 class UserTier(str, Enum):
     """User tier enumeration"""
+    UNVERIFIED = "unverified"
     FREE = "free"
     PRO = "pro"
     ENTERPRISE = "enterprise"
