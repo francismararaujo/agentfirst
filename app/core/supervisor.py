@@ -168,7 +168,7 @@ class Supervisor:
     
     def __init__(
         self,
-        table_name: str = "AgentFirst-Escalation",
+        table_name: Optional[str] = None,
         region: str = "us-east-1",
         auditor: Optional[Auditor] = None,
         telegram_service=None
