@@ -445,7 +445,7 @@ class Auditor:
         """
         try:
             # Helper to convert floats to Decimal for DynamoDB
-            from app.shared.utils import to_decimal
+            from app.shared.decimal_utils import to_decimal
 
             # Preparar item para DynamoDB
             item = audit_entry.to_dict()

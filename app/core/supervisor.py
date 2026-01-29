@@ -682,7 +682,7 @@ class Supervisor:
         """Armazena escalação no DynamoDB"""
         try:
             # Helper to convert floats to Decimal
-            from app.shared.utils import to_decimal
+            from app.shared.decimal_utils import to_decimal
             
             item = to_decimal(escalation.to_dict())
             
