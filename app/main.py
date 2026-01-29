@@ -26,7 +26,11 @@ from aws_xray_sdk.core import patch_all
 from app.config.settings import settings
 from app.core.request_validator import RequestValidator
 from app.omnichannel.telegram_service import TelegramService
-from app.omnichannel.database.repositories import UserRepository
+from app.omnichannel.database.repositories import UserRepository, ChannelMappingRepository
+from app.omnichannel.authentication.auth_service import AuthService, AuthConfig
+from app.omnichannel.authentication.telegram_auth import TelegramAuthService
+from app.omnichannel.authentication.otp_manager import OTPManager
+from app.core.email_service import EmailServiceer
 from app.omnichannel.database.models import User, UserTier
 from app.omnichannel.models import ChannelType
 from app.core.brain import Brain
@@ -285,19 +289,52 @@ async def telegram_webhook(request: Request):
             # Initialize repositories and services
             user_repo = UserRepository()
             
-            # Get or create user
+            # Get or create user (returns None if not found)
             user = await user_repo.get_by_telegram_id(user_id)
             
-            if not user:
-                # New user - ask for email
-                response_text = (
-                    "👋 Olá! Bem-vindo ao AgentFirst!\n\n"
-                    "🍔 Sou seu assistente para gerenciar pedidos do iFood.\n\n"
-                    "Para começar, preciso do seu email para identificá-lo em todos os canais.\n\n"
-                    "📧 Por favor, envie seu email (ex: seu@email.com):"
+            # Check if user needs authentication handling (Not found OR Unverified)
+            needs_auth = (not user) or (user.tier == 'unverified')
+            
+            if needs_auth:
+                # Initialize Authentication Services
+                auth_config = AuthConfig(
+                    region=settings.AWS_REGION,
+                    users_table=settings.DYNAMODB_USERS_TABLE
                 )
+                auth_service = AuthService(auth_config)
+                channel_mapping_repo = ChannelMappingRepository()
+                
+                # Setup OTP Manager
+                email_service = EmailService(region_name=settings.AWS_REGION)
+                otp_manager = OTPManager(email_service)
+                
+                # Initialize Telegram Auth Service
+                telegram_auth = TelegramAuthService(
+                    auth_service=auth_service,
+                    user_repo=user_repo,
+                    channel_mapping_repo=channel_mapping_repo,
+                    otp_manager=otp_manager
+                )
+                
+                # Handle authentication flow
+                logger.info(f"Handling authentication flow for telegram_id {user_id}")
+                auth_result = await telegram_auth.handle_telegram_message(
+                    telegram_id=user_id,
+                    message_text=text,
+                    chat_id=chat_id,
+                    first_name=message.get("from", {}).get("first_name"),
+                    username=message.get("from", {}).get("username")
+                )
+                
+                response_text = auth_result.get("message")
+                
+                # If registration just completed, we might want to let them know specifically
+                if auth_result.get("action") == "registration_complete":
+                    logger.info(f"Registration completed for {user_id}")
+                    # We could optionally proceed to process the message here, 
+                    # but it's cleaner to just return the welcome message.
             else:
-                # User exists - process via Brain with full AWS integration
+                # User exists and is verified - process via Brain with full AWS integration
                 try:
                     # Initialize all services with real AWS clients
                     auditor = Auditor()

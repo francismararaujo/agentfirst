@@ -44,6 +44,7 @@ class CoreStack(Stack):
         self.usage_table = self._create_usage_table()
         self.audit_logs_table = self._create_audit_logs_table()
         self.escalation_table = self._create_escalation_table()
+        self.otp_table = self._create_otp_table()
 
         # Create SNS topics
         self.omnichannel_topic = self._create_omnichannel_topic()
@@ -240,6 +241,24 @@ class CoreStack(Stack):
 
         return table
 
+    def _create_otp_table(self) -> dynamodb.Table:
+        """Create OTP DynamoDB table"""
+        table = dynamodb.Table(
+            self,
+            "OTPTable",
+            partition_key=dynamodb.Attribute(
+                name="email",
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            encryption=dynamodb.TableEncryption.CUSTOMER_MANAGED,
+            encryption_key=self.kms_key,
+            time_to_live_attribute="expires_at",
+            removal_policy=RemovalPolicy.RETAIN,
+            table_name=f"agentfirst-otp-{self.environment_name}",
+        )
+        return table
+
     def _create_omnichannel_topic(self) -> sns.Topic:
         """Create SNS topic for omnichannel events"""
         topic = sns.Topic(
@@ -333,6 +352,13 @@ class CoreStack(Stack):
             "EscalationTableName",
             value=self.escalation_table.table_name,
             export_name=f"agentfirst-escalation-table-{self.environment_name}",
+        )
+
+        CfnOutput(
+            self,
+            "OTPTableName",
+            value=self.otp_table.table_name,
+            export_name=f"agentfirst-otp-table-{self.environment_name}",
         )
 
         CfnOutput(

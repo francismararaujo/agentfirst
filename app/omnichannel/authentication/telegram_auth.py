@@ -17,6 +17,7 @@ from botocore.exceptions import ClientError
 from app.omnichannel.authentication.auth_service import AuthService, AuthConfig
 from app.omnichannel.database.repositories import UserRepository, ChannelMappingRepository
 from app.omnichannel.models import ChannelType
+from app.omnichannel.authentication.otp_manager import OTPManager
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +30,12 @@ class TelegramAuthService:
         auth_service: AuthService,
         user_repo: UserRepository,
         channel_mapping_repo: ChannelMappingRepository,
+        otp_manager: OTPManager,
     ):
         self.auth_service = auth_service
         self.user_repo = user_repo
         self.channel_mapping_repo = channel_mapping_repo
+        self.otp_manager = otp_manager
 
     async def register_telegram_user(
         self,
@@ -236,41 +239,142 @@ class TelegramAuthService:
 
             # Check if message is email for registration
             if self._is_email(message_text):
-                # Register new user
                 email = message_text.strip().lower()
-
-                logger.info(
-                    json.dumps({
-                        "event": "email_registration_detected",
+                
+                logger.info(f"Processing email registration/OTP request for {email}")
+                
+                # Check if user exists (fully registered)
+                user = await self.auth_service.get_user(email)
+                if user and user.tier != 'unverified':
+                    return {
+                        "success": False,
+                        "user_exists": True,
+                        "action": "login",
+                        "message": "Este email já está cadastrado. Se você já tem uma conta, por favor entre em contato com o suporte para vincular ao Telegram."
+                    }
+                
+                # Create 'unverified' user if doesn't exist to store state
+                # This links the telegram_id to this email via the User record
+                if not user:
+                    user = await self.auth_service.create_user(email, tier="unverified")
+                    
+                # Link this telegram_id to the user (so we can find them when they send the code)
+                # We update the user record with the telegram_id
+                await self.user_repo.update(
+                    email,
+                    {
                         "telegram_id": telegram_id,
-                        "email": email,
-                    })
+                        "first_name": first_name,
+                        "username": username,
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    },
                 )
 
-                result = await self.register_telegram_user(
-                    telegram_id=telegram_id,
-                    email=email,
-                    first_name=first_name,
-                    username=username,
-                )
+                # Send OTP
+                sent = await self.otp_manager.send_otp(email)
+                
+                if sent:
+                    return {
+                        "success": True,
+                        "user_exists": False,
+                        "action": "waiting_for_otp",
+                        "message": (
+                            f"✅ Envei um código de verificação para **{email}**.\n\n"
+                            "⏳ Verifique seu e-mail (e a pasta de spam) e **digite o código de 6 números** aqui."
+                        )
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "action": "error",
+                        "message": "❌ Falha ao enviar email. Verifique se o endereço está correto e tente novamente."
+                    }
 
-                return {
-                    "success": True,
-                    "user_exists": False,
-                    "email": email,
-                    "tier": result["tier"],
-                    "message": result["message"],
-                    "action": "registration_complete",
-                }
+            # Check if message is OTP Code (6 digits)
+            elif message_text.strip().isdigit() and len(message_text.strip()) == 6:
+                otp_code = message_text.strip()
+                logger.info(f"Processing OTP code {otp_code} for telegram_id {telegram_id}")
+
+                # Find user linked to this telegram_id (should be 'unverified')
+                # get_user_by_telegram_id calls user_repo.get_by_telegram_id
+                # but user_repo returns the User object.
+                # However, our get_user_by_telegram_id wrapper returns 'user' (User object) or None
+                # Wait, lets check self.get_user_by_telegram_id implementation below lines 142
+                # It calls user_repo.get_by_telegram_id -> returns User
+                
+                # We can't use self.get_user_by_telegram_id because it returns a Dict or User object?
+                # Line 153: user = await self.user_repo.get_by_telegram_id(telegram_id)
+                # It returns a User model instance (from app.omnichannel.database.repositories)
+                
+                user = await self.user_repo.get_by_telegram_id(telegram_id)
+                
+                if not user:
+                    return {
+                        "success": False,
+                        "action": "ask_for_email",
+                        "message": "⚠️ Não encontrei um pedido de cadastro para você. Por favor, envie seu email primeiro."
+                    }
+                
+                if user.tier != 'unverified':
+                     return {
+                        "success": True,
+                        "user_exists": True,
+                        "action": "process_message",
+                        "message_text": message_text
+                     }
+
+                # Verify OTP
+                verification = await self.otp_manager.verify_otp(user.email, otp_code)
+                
+                if verification["success"]:
+                    # Upgrade user to 'free'
+                    await self.auth_service.update_user_tier(user.email, "free")
+                    
+                    # Create channel mapping (Completing registration)
+                    await self.channel_mapping_repo.create_mapping(
+                        email=user.email,
+                        channel=ChannelType.TELEGRAM.value,
+                        channel_user_id=str(telegram_id),
+                        metadata={
+                            "first_name": first_name,
+                            "last_name": str(username) if username else None, # Fix type compatibility
+                            "username": username,
+                            "registered_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+                    
+                    return {
+                        "success": True,
+                        "user_exists": True,
+                        "email": user.email,
+                        "tier": "free",
+                        "action": "registration_complete",
+                        "message": (
+                            "🎉 **Código Verificado com Sucesso!**\n\n"
+                            "Seu cadastro foi concluído. Agora você pode conversar comigo para gerenciar sua loja!"
+                        )
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "action": "waiting_for_otp",
+                        "message": f"❌ {verification['message']}"
+                    }
 
             else:
-                # User not registered and message is not email
-                logger.info(
-                    json.dumps({
-                        "event": "unregistered_user_non_email_message",
-                        "telegram_id": telegram_id,
-                    })
-                )
+                # User not registered and message is neither email nor OTP
+                # Check if we have a pending unverified user
+                user = await self.user_repo.get_by_telegram_id(telegram_id)
+                
+                if user and user.tier == 'unverified':
+                     return {
+                        "success": False,
+                        "action": "waiting_for_otp",
+                        "message": (
+                            "🕒 Estou aguardando o código de verificação enviado para seu email.\n"
+                            "Por favor, digite os **6 números** ou envie um novo email para corrigir."
+                        )
+                    }
 
                 return {
                     "success": False,

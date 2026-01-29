@@ -79,6 +79,7 @@ class LambdaStack(Stack):
             self.core_stack.usage_table,
             self.core_stack.audit_logs_table,
             self.core_stack.escalation_table,
+            self.core_stack.otp_table,
         ]:
             table.grant_read_write_data(lambda_role)
 
@@ -120,6 +121,15 @@ class LambdaStack(Stack):
             )
         )
 
+        # Add SES send email access
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["ses:SendEmail"],
+                resources=["*"],
+            )
+        )
+
         # Create Lambda function using Docker image
         # This ensures compiled dependencies like pydantic_core are properly included
         
@@ -145,6 +155,7 @@ class LambdaStack(Stack):
                 "DYNAMODB_USAGE_TABLE": self.core_stack.usage_table.table_name,
                 "DYNAMODB_AUDIT_TABLE": self.core_stack.audit_logs_table.table_name,
                 "DYNAMODB_ESCALATION_TABLE": self.core_stack.escalation_table.table_name,
+                "DYNAMODB_OTP_TABLE": self.core_stack.otp_table.table_name,
                 "SNS_OMNICHANNEL_TOPIC_ARN": self.core_stack.omnichannel_topic.topic_arn,
                 "SNS_RETAIL_TOPIC_ARN": self.core_stack.retail_topic.topic_arn,
                 "SQS_QUEUE_URL": self.core_stack.queue.queue_url,
