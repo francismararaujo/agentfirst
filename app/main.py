@@ -41,6 +41,9 @@ from app.domains.retail.retail_agent import RetailAgent
 from app.domains.retail.ifood_connector_extended import iFoodConnectorExtended
 from app.config.secrets_manager import SecretsManager
 from app.omnichannel.interface import OmnichannelInterface
+from app.omnichannel.authentication.auth_service import AuthService, AuthConfig
+from app.omnichannel.authentication.telegram_auth import TelegramAuthService
+from app.omnichannel.database.repositories import ChannelMappingRepository
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -291,12 +294,15 @@ async def telegram_webhook(request: Request):
         try:
             # Initialize repositories and services
             user_repo = UserRepository()
+            auth_config = AuthConfig(region=settings.AWS_REGION, users_table=settings.DYNAMODB_USERS_TABLE)
+            auth_service = AuthService(auth_config)
+            channel_mapping_repo = ChannelMappingRepository()
             
             # Get or create user (returns None if not found)
             user = await user_repo.get_by_telegram_id(user_id)
             
             # Check if user needs authentication handling (Not found OR Unverified)
-            needs_auth = (not user) or (user.tier == UserTier.UNVERIFIED)
+            needs_auth = (not user) or (getattr(user, 'tier', '') == 'unverified')
             
             if needs_auth:
                 # Initialize Authentication Services
@@ -404,6 +410,10 @@ async def telegram_webhook(request: Request):
                     else:
                         response_text = result["response"]
                         logger.warning(f"Brain processing failed: {result.get('reason', 'unknown')}")
+                    
+                    # Ensure response_text is not None/null
+                    if not response_text or response_text == "null":
+                        response_text = "❌ Ocorreu um erro silencioso no processamento. Tente novamente."
                         
                 except Exception as brain_error:
                     logger.error(f"Error processing via Brain: {str(brain_error)}", exc_info=True)
