@@ -224,15 +224,15 @@ class TelegramAuthService:
                     json.dumps({
                         "event": "telegram_user_already_registered",
                         "telegram_id": telegram_id,
-                        "email": existing_user.get("email"),
+                        "email": existing_user.email,
                     })
                 )
 
                 return {
                     "success": True,
                     "user_exists": True,
-                    "email": existing_user.get("email"),
-                    "tier": existing_user.get("tier"),
+                    "email": existing_user.email,
+                    "tier": existing_user.tier.value,
                     "message_text": message_text,
                     "action": "process_message",
                 }
