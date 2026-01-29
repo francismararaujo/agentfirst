@@ -282,6 +282,9 @@ async def telegram_webhook(request: Request):
         # Initialize Telegram service
         telegram = TelegramService()
         
+        # Initialize response_text with default value
+        response_text = "Desculpe, ocorreu um erro ao processar sua mensagem."
+        
         # Send typing indicator
         await telegram.send_typing_indicator(chat_id)
 
