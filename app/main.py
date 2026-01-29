@@ -30,7 +30,7 @@ from app.omnichannel.database.repositories import UserRepository, ChannelMapping
 from app.omnichannel.authentication.auth_service import AuthService, AuthConfig
 from app.omnichannel.authentication.telegram_auth import TelegramAuthService
 from app.omnichannel.authentication.otp_manager import OTPManager
-from app.core.email_service import EmailServiceer
+from app.core.email_service import EmailService
 from app.omnichannel.database.models import User, UserTier
 from app.omnichannel.models import ChannelType
 from app.core.brain import Brain
