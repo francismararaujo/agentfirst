@@ -39,6 +39,8 @@ jobs:
           pip install -r infra/cdk/requirements.txt
           
       - name: CDK Deploy
+        env:
+          ENVIRONMENT: production
         run: |
           echo "🚀 Deploying Infrastructure & Code with CDK..."
           cd infra/cdk
