@@ -189,7 +189,7 @@ class Supervisor:
         
         # DynamoDB
         self.dynamodb = boto3.resource('dynamodb', region_name=region)
-        self.table = self.dynamodb.Table(table_name)
+        self.table = self.dynamodb.Table(self.table_name)
         
         # Configurações
         self.default_timeout_minutes = 30
