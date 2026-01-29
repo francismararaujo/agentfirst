@@ -164,6 +164,7 @@ class LambdaStack(Stack):
                 "TELEGRAM_WEBHOOK_URL": os.getenv("TELEGRAM_WEBHOOK_URL", ""),
                 "IFOOD_CLIENT_ID": os.getenv("IFOOD_CLIENT_ID", ""),
                 "IFOOD_CLIENT_SECRET": os.getenv("IFOOD_CLIENT_SECRET", ""),
+                "SENDER_EMAIL": os.getenv("SENDER_EMAIL", "naoresponder@agentfirst.com.br"),
             },
             role=lambda_role,
             tracing=lambda_.Tracing.ACTIVE,

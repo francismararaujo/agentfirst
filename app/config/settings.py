@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     BEDROCK_MODEL_ID: str = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-3-5-sonnet-20241022-v2:0")
     BEDROCK_REGION: str = os.getenv("BEDROCK_REGION", "us-east-1")
 
+    # Email Configuration (SES)
+    SENDER_EMAIL: str = os.getenv("SENDER_EMAIL", "naoresponder@agentfirst.com.br")
+
     # Telegram Configuration
     TELEGRAM_BOT_TOKEN: Optional[str] = os.getenv("TELEGRAM_BOT_TOKEN", None)
     TELEGRAM_WEBHOOK_URL: Optional[str] = os.getenv("TELEGRAM_WEBHOOK_URL", None)

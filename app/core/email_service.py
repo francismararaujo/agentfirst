@@ -20,7 +20,7 @@ class EmailService:
         """Initialize SES client"""
         self.region_name = region_name or settings.AWS_REGION
         self.client = boto3.client("ses", region_name=self.region_name)
-        self.sender = settings.SENDER_EMAIL if hasattr(settings, "SENDER_EMAIL") else "noreply@agentfirst.app"
+        self.sender = settings.SENDER_EMAIL
 
     def send_email(
         self,
