@@ -481,7 +481,7 @@ async def ifood_webhook(request: Request):
         body_str = body.decode("utf-8")
 
         # Get signature from headers
-        signature = request.headers.get("X-Signature", "")
+        signature = request.headers.get("X-IFood-Signature", "")
 
         # Validate HMAC signature (iFood requirement)
         try:
@@ -501,8 +501,12 @@ async def ifood_webhook(request: Request):
                 hashlib.sha256
             ).hexdigest()
             
+            # Handle standard "sha256=" prefix if present in the header
+            if signature.startswith("sha256="):
+                signature = signature.split("=")[1]
+            
             # Validate signature
-            if not hmac.compare_digest(f"sha256={expected_signature}", signature):
+            if not hmac.compare_digest(expected_signature, signature):
                 logger.warning("Invalid iFood webhook signature")
                 return JSONResponse(
                     status_code=401,
