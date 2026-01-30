@@ -475,6 +475,6 @@ class ChannelMappingRepository(DynamoDBRepository):
             logger.error(f"Error getting channel mappings by email: {str(e)}")
             return []
 
-    async def create_mapping(self, channel: str, channel_user_id: str, email: str) -> Dict[str, Any]:
+    async def create_mapping(self, channel: str, channel_user_id: str, email: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Create channel mapping (for now, just return the mapping)"""
-        return {'email': email, 'channel': channel, 'channel_user_id': channel_user_id}
+        return {'email': email, 'channel': channel, 'channel_user_id': channel_user_id, 'metadata': metadata}
