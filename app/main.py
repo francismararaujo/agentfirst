@@ -583,7 +583,7 @@ async def ifood_webhook(request: Request):
                 logger.info(f"New order: {order_id} - R$ {total_amount}")
                 
                 # Acknowledge event to iFood
-                await ifood_connector.acknowledge_event(event_id, merchant_id)
+                await ifood_connector.acknowledge_event(event_id)
                 
                 # Publish event to SNS/SQS Event Bus
                 await event_bus.publish_event(
