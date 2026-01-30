@@ -124,13 +124,13 @@ class SessionManager:
 
         return session
 
-    async def get_session(self, session_id: str) -> Optional[Session]:
-        """Get session by ID"""
-        if not session_id:
-            raise ValueError("Session ID is required")
+    async def get_session(self, session_id: str, email: str) -> Optional[Session]:
+        """Get session by ID and email"""
+        if not session_id or not email:
+            raise ValueError("Session ID and Email are required")
 
         try:
-            response = self.table.get_item(Key={'session_id': session_id})
+            response = self.table.get_item(Key={'email': email, 'session_id': session_id})
 
             if 'Item' not in response:
                 return None
@@ -140,7 +140,7 @@ class SessionManager:
             # Check if expired
             if session.is_expired():
                 # Delete expired session
-                await self.delete_session(session_id)
+                await self.delete_session(session_id, email)
                 return None
 
             return session
@@ -168,7 +168,7 @@ class SessionManager:
             # Check if expired
             if session.is_expired():
                 # Delete expired session
-                await self.delete_session(session.session_id)
+                await self.delete_session(session.session_id, email)
                 return None
 
             return session
@@ -194,21 +194,21 @@ class SessionManager:
                     sessions.append(session)
                 else:
                     # Delete expired session
-                    await self.delete_session(session.session_id)
+                    await self.delete_session(session.session_id, email)
 
             return sessions
         except ClientError as e:
             raise ValueError(f"Failed to get sessions: {str(e)}")
 
-    async def update_session(self, session_id: str,
+    async def update_session(self, session_id: str, email: str,
                             context: Dict[str, Any] = None,
                             metadata: Dict[str, Any] = None) -> Optional[Session]:
         """Update session context and metadata"""
-        if not session_id:
-            raise ValueError("Session ID is required")
+        if not session_id or not email:
+            raise ValueError("Session ID and Email are required")
 
         # Get existing session
-        session = await self.get_session(session_id)
+        session = await self.get_session(session_id, email)
         if not session:
             raise ValueError("Session not found or expired")
 
@@ -224,50 +224,50 @@ class SessionManager:
                 updates['metadata'] = metadata
 
             self.table.update_item(
-                Key={'session_id': session_id},
+                Key={'email': email, 'session_id': session_id},
                 UpdateExpression='SET ' + ', '.join([f'{k} = :{k}' for k in updates.keys()]),
                 ExpressionAttributeValues={f':{k}': v for k, v in updates.items()}
             )
 
             # Fetch updated session
-            return await self.get_session(session_id)
+            return await self.get_session(session_id, email)
         except ClientError as e:
             raise ValueError(f"Failed to update session: {str(e)}")
 
-    async def update_session_context(self, session_id: str, context_updates: Dict[str, Any]) -> Optional[Session]:
+    async def update_session_context(self, session_id: str, email: str, context_updates: Dict[str, Any]) -> Optional[Session]:
         """Update session context (merge with existing)"""
-        if not session_id:
-            raise ValueError("Session ID is required")
+        if not session_id or not email:
+            raise ValueError("Session ID and Email are required")
 
         # Get existing session
-        session = await self.get_session(session_id)
+        session = await self.get_session(session_id, email)
         if not session:
             raise ValueError("Session not found or expired")
 
         # Merge context
         merged_context = {**session.context, **context_updates}
 
-        return await self.update_session(session_id, context=merged_context)
+        return await self.update_session(session_id, email, context=merged_context)
 
-    async def validate_session(self, session_id: str) -> bool:
+    async def validate_session(self, session_id: str, email: str) -> bool:
         """Validate if session is still valid"""
-        if not session_id:
+        if not session_id or not email:
             return False
 
         try:
-            session = await self.get_session(session_id)
+            session = await self.get_session(session_id, email)
             return session is not None and session.is_valid()
         except ValueError:
             return False
 
-    async def delete_session(self, session_id: str) -> bool:
+    async def delete_session(self, session_id: str, email: str) -> bool:
         """Delete session"""
-        if not session_id:
-            raise ValueError("Session ID is required")
+        if not session_id or not email:
+            raise ValueError("Session ID and Email are required")
 
         try:
             response = self.table.delete_item(
-                Key={'session_id': session_id},
+                Key={'email': email, 'session_id': session_id},
                 ReturnValues='ALL_OLD'
             )
 
@@ -285,20 +285,20 @@ class SessionManager:
             deleted_count = 0
 
             for session in sessions:
-                if await self.delete_session(session.session_id):
+                if await self.delete_session(session.session_id, email):
                     deleted_count += 1
 
             return deleted_count
         except ClientError as e:
             raise ValueError(f"Failed to delete sessions: {str(e)}")
 
-    async def extend_session(self, session_id: str) -> Optional[Session]:
+    async def extend_session(self, session_id: str, email: str) -> Optional[Session]:
         """Extend session expiration by 24 hours"""
-        if not session_id:
-            raise ValueError("Session ID is required")
+        if not session_id or not email:
+            raise ValueError("Session ID and Email are required")
 
         # Get existing session
-        session = await self.get_session(session_id)
+        session = await self.get_session(session_id, email)
         if not session:
             raise ValueError("Session not found or expired")
 
@@ -307,7 +307,7 @@ class SessionManager:
 
         try:
             self.table.update_item(
-                Key={'session_id': session_id},
+                Key={'email': email, 'session_id': session_id},
                 UpdateExpression='SET expires_at = :expires, updated_at = :updated, ttl = :ttl',
                 ExpressionAttributeValues={
                     ':expires': new_expires,
@@ -316,7 +316,7 @@ class SessionManager:
                 }
             )
 
-            return await self.get_session(session_id)
+            return await self.get_session(session_id, email)
         except ClientError as e:
             raise ValueError(f"Failed to extend session: {str(e)}")
 
