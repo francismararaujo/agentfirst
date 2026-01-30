@@ -219,23 +219,27 @@ class TelegramAuthService:
             existing_user = await self.get_user_by_telegram_id(telegram_id)
 
             if existing_user:
-                # User already registered
-                logger.info(
-                    json.dumps({
-                        "event": "telegram_user_already_registered",
-                        "telegram_id": telegram_id,
-                        "email": existing_user.email,
-                    })
-                )
+                # User exists - check if verified
+                if existing_user.tier != 'unverified' and getattr(existing_user.tier, 'value', existing_user.tier) != 'unverified':
+                    # User fully registered
+                    logger.info(
+                        json.dumps({
+                            "event": "telegram_user_already_registered",
+                            "telegram_id": telegram_id,
+                            "email": existing_user.email,
+                        })
+                    )
 
-                return {
-                    "success": True,
-                    "user_exists": True,
-                    "email": existing_user.email,
-                    "tier": existing_user.tier.value,
-                    "message_text": message_text,
-                    "action": "process_message",
-                }
+                    return {
+                        "success": True,
+                        "user_exists": True,
+                        "email": existing_user.email,
+                        "tier": getattr(existing_user.tier, 'value', existing_user.tier),
+                        "message_text": message_text,
+                        "action": "process_message",
+                    }
+                # If unverified, fall through to registration logic
+                logger.info(f"User {existing_user.email} exists but is UNVERIFIED. Continuing registration flow.")
 
             # Check if message is email for registration
             if self._is_email(message_text):
