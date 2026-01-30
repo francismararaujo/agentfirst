@@ -288,6 +288,13 @@ class TelegramAuthService:
                         )
                     }
                 else:
+                    # Email failed to send. Clean up user so they don't get stuck in 'waiting_for_otp'
+                    try:
+                        await self.user_repo.delete(email)
+                        logger.info(f"Deleted unverified user {email} due to email send failure")
+                    except Exception as e:
+                        logger.error(f"Failed to delete user after email failure: {str(e)}")
+
                     return {
                         "success": False,
                         "action": "error",
