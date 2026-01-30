@@ -658,7 +658,7 @@ async def ifood_webhook(request: Request):
                 logger.info(f"Order cancelled: {order_id} - Reason: {cancellation_reason}")
                 
                 # Acknowledge event
-                await ifood_connector.acknowledge_event(event_id, merchant_id)
+                await ifood_connector.acknowledge_event(event_id)
                 
                 # Publish event
                 await event_bus.publish_event(
@@ -693,7 +693,7 @@ async def ifood_webhook(request: Request):
                 logger.info(f"Order status changed: {order_id} -> {new_status}")
                 
                 # Acknowledge event
-                await ifood_connector.acknowledge_event(event_id, merchant_id)
+                await ifood_connector.acknowledge_event(event_id)
                 
                 # Publish event
                 await event_bus.publish_event(
@@ -724,7 +724,7 @@ async def ifood_webhook(request: Request):
             else:
                 # Unknown event type - still acknowledge
                 logger.warning(f"Unknown iFood event type: {event_type}")
-                await ifood_connector.acknowledge_event(event_id, merchant_id)
+                await ifood_connector.acknowledge_event(event_id)
             
             logger.info(f"Successfully processed iFood event: {event_id}")
             
