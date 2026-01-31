@@ -479,8 +479,14 @@ async def ifood_webhook(request: Request):
         # Get request body
         try:
             body = await request.body()
-            # Log raw body size for debugging
-            logger.error(f"iFood Webhook received. Body size: {len(body)} bytes")
+            
+            # LOG EVERYTHING - Headers and Body (for debugging iFood Portal issues)
+            logger.error("=" * 80)
+            logger.error("iFood Webhook - RAW REQUEST CAPTURE")
+            logger.error(f"Headers: {dict(request.headers)}")
+            logger.error(f"Body size: {len(body)} bytes")
+            logger.error(f"Body (raw bytes): {body}")
+            logger.error("=" * 80)
             
             try:
                 body_str = body.decode("utf-8")
