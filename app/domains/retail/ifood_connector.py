@@ -311,7 +311,8 @@ class iFoodConnector(BaseConnector):
             
             async with session.post(
                 self.AUTH_URL,
-                json=auth_data,
+                data=auth_data,
+                headers={'Content-Type': 'application/x-www-form-urlencoded'},
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as response:
                 if response.status != 200:
@@ -360,7 +361,8 @@ class iFoodConnector(BaseConnector):
             
             async with session.post(
                 self.AUTH_URL,
-                json=refresh_data,
+                data=refresh_data,
+                headers={'Content-Type': 'application/x-www-form-urlencoded'},
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as response:
                 if response.status != 200:
