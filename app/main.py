@@ -544,6 +544,11 @@ async def ifood_webhook(request: Request):
 
             logger.error(f"Received iFood webhook JSON: {json.dumps(data)}")
 
+            # Handle KEEPALIVE connection test (iFood Portal "Test connection")
+            if data.get("code") == "KEEPALIVE" or data.get("fullCode") == "KEEPALIVE":
+                logger.info("Received iFood KEEPALIVE connection test - responding OK")
+                return {"ok": True}
+
             # Process iFood event
             event_id = data.get("eventId")
             event_type = data.get("eventType")
