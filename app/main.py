@@ -577,8 +577,8 @@ async def ifood_webhook(request: Request):
             # Process event based on type
             if event_type == "order.placed":
                 # New order received
-                order_id = event_data.get("orderId")
-                total_amount = event_data.get("totalAmount")
+                order_id = data.get("orderId")
+                total_amount = data.get("totalAmount")
                 
                 logger.info(f"New order: {order_id} - R$ {total_amount}")
                 
@@ -596,9 +596,9 @@ async def ifood_webhook(request: Request):
                             "order_id": order_id,
                             "merchant_id": merchant_id,
                             "total_amount": total_amount,
-                            "items": event_data.get("items", []),
-                            "customer": event_data.get("customer", {}),
-                            "delivery_address": event_data.get("deliveryAddress", {})
+                            "items": data.get("items", []),
+                            "customer": data.get("customer", {}),
+                            "delivery_address": data.get("deliveryAddress", {})
                         }
                     )
                 )
@@ -653,8 +653,8 @@ async def ifood_webhook(request: Request):
                 
             elif event_type == "order.cancelled":
                 # Order cancelled
-                order_id = event_data.get("orderId")
-                cancellation_reason = event_data.get("cancellationReason")
+                order_id = data.get("orderId")
+                cancellation_reason = data.get("cancellationReason")
                 logger.info(f"Order cancelled: {order_id} - Reason: {cancellation_reason}")
                 
                 # Acknowledge event
@@ -671,7 +671,7 @@ async def ifood_webhook(request: Request):
                             "order_id": order_id,
                             "merchant_id": merchant_id,
                             "reason": cancellation_reason,
-                            "cancelled_at": event_data.get("cancelledAt")
+                            "cancelled_at": data.get("cancelledAt")
                         }
                     )
                 )
@@ -688,8 +688,8 @@ async def ifood_webhook(request: Request):
                 
             elif event_type == "order.status_changed":
                 # Order status changed
-                order_id = event_data.get("orderId")
-                new_status = event_data.get("status")
+                order_id = data.get("orderId")
+                new_status = data.get("status")
                 logger.info(f"Order status changed: {order_id} -> {new_status}")
                 
                 # Acknowledge event
@@ -706,7 +706,7 @@ async def ifood_webhook(request: Request):
                             "order_id": order_id,
                             "merchant_id": merchant_id,
                             "status": new_status,
-                            "status_changed_at": event_data.get("statusChangedAt")
+                            "status_changed_at": data.get("statusChangedAt")
                         }
                     )
                 )
